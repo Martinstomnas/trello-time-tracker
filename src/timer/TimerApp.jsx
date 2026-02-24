@@ -4,12 +4,6 @@ import { formatTimer, formatDuration, getTotalWithActive, parseDuration } from '
 
 /**
  * TimerApp – The popup shown when a user clicks "Tidstracker" on a card.
- *
- * Features:
- * - Big start/stop button for current user
- * - Live ticking timer display
- * - Per-person time breakdown
- * - Manual time adjustment (+/- input)
  */
 export default function TimerApp({ t }) {
   const [timeData, setTimeData] = useState({});
@@ -18,7 +12,19 @@ export default function TimerApp({ t }) {
   const [now, setNow] = useState(Date.now());
   const [manualInput, setManualInput] = useState('');
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const tickRef = useRef(null);
+
+  // Fetch fresh data from Supabase
+  const refreshData = useCallback(async () => {
+    try {
+      const data = await getCardTimeData(t);
+      setTimeData(data);
+      setNow(Date.now());
+    } catch (e) {
+      console.error('[TimeTracker] refreshData error:', e);
+    }
+  }, [t]);
 
   // Load data on mount
   useEffect(() => {
@@ -26,12 +32,11 @@ export default function TimerApp({ t }) {
       const member = await t.member('id', 'fullName');
       setMemberId(member.id);
       setMemberName(member.fullName);
-      const data = await getCardTimeData(t);
-      setTimeData(data);
+      await refreshData();
       setLoading(false);
     }
     init();
-  }, [t]);
+  }, [t, refreshData]);
 
   // Tick every second when a timer is active
   useEffect(() => {
@@ -50,44 +55,49 @@ export default function TimerApp({ t }) {
   const myData = memberId ? timeData[memberId] : null;
   const isRunning = myData?.activeStart != null;
   const myTotal = myData ? getTotalWithActive(myData) : 0;
-
-  // Recompute on tick
   const displayTotal = isRunning ? (myData.totalMs || 0) + (now - myData.activeStart) : myTotal;
 
   const handleToggle = useCallback(async () => {
-    if (isRunning) {
-      const data = await stopTimer(t);
-      setTimeData(data);
-    } else {
-      const data = await startTimer(t);
-      setTimeData(data);
+    setSaving(true);
+    try {
+      if (isRunning) {
+        await stopTimer(t);
+      } else {
+        await startTimer(t);
+      }
+      await refreshData();
+    } catch (e) {
+      console.error('[TimeTracker] toggle error:', e);
     }
-    setNow(Date.now());
-  }, [t, isRunning]);
+    setSaving(false);
+  }, [t, isRunning, refreshData]);
 
   const handleManualAdd = useCallback(async () => {
     const ms = parseDuration(manualInput);
     if (ms > 0) {
-      const data = await adjustTime(t, ms);
-      setTimeData(data);
+      setSaving(true);
+      await adjustTime(t, ms);
+      await refreshData();
       setManualInput('');
+      setSaving(false);
     }
-  }, [t, manualInput]);
+  }, [t, manualInput, refreshData]);
 
   const handleManualSubtract = useCallback(async () => {
     const ms = parseDuration(manualInput);
     if (ms > 0) {
-      const data = await adjustTime(t, -ms);
-      setTimeData(data);
+      setSaving(true);
+      await adjustTime(t, -ms);
+      await refreshData();
       setManualInput('');
+      setSaving(false);
     }
-  }, [t, manualInput]);
+  }, [t, manualInput, refreshData]);
 
   if (loading) {
     return <div style={styles.center}>Laster...</div>;
   }
 
-  // All members with tracked time
   const members = Object.entries(timeData).map(([id, d]) => ({
     id,
     name: d.name || id,
@@ -99,18 +109,19 @@ export default function TimerApp({ t }) {
 
   return (
     <div style={styles.container}>
-      {/* ── My Timer ────────────────────────────────── */}
+      {/* Timer display */}
       <div style={styles.timerSection}>
         <div style={styles.timerDisplay}>{formatTimer(displayTotal)}</div>
 
         <button
           onClick={handleToggle}
+          disabled={saving}
           style={{
             ...styles.toggleBtn,
-            backgroundColor: isRunning ? '#EB5A46' : '#61BD4F',
+            backgroundColor: saving ? '#A5ADBA' : isRunning ? '#EB5A46' : '#61BD4F',
           }}
         >
-          {isRunning ? '⏹ Stopp' : '▶ Start'}
+          {saving ? '...' : isRunning ? '⏹ Stopp' : '▶ Start'}
         </button>
 
         <div style={styles.myTotal}>
@@ -118,7 +129,7 @@ export default function TimerApp({ t }) {
         </div>
       </div>
 
-      {/* ── Manual adjustment ──────────────────────── */}
+      {/* Manual adjustment */}
       <div style={styles.section}>
         <div style={styles.sectionTitle}>Manuell justering</div>
         <div style={styles.manualRow}>
@@ -128,17 +139,18 @@ export default function TimerApp({ t }) {
             value={manualInput}
             onChange={(e) => setManualInput(e.target.value)}
             style={styles.input}
+            disabled={saving}
           />
-          <button onClick={handleManualAdd} style={styles.smallBtn} title="Legg til tid">
+          <button onClick={handleManualAdd} style={styles.smallBtn} disabled={saving} title="Legg til tid">
             +
           </button>
-          <button onClick={handleManualSubtract} style={styles.smallBtnRed} title="Trekk fra tid">
+          <button onClick={handleManualSubtract} style={styles.smallBtnRed} disabled={saving} title="Trekk fra tid">
             −
           </button>
         </div>
       </div>
 
-      {/* ── Per-person breakdown ───────────────────── */}
+      {/* Per-person breakdown */}
       {members.length > 0 && (
         <div style={styles.section}>
           <div style={styles.sectionTitle}>Alle på dette kortet</div>
@@ -186,9 +198,6 @@ export default function TimerApp({ t }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Inline styles (keeps things simple without a CSS build step)
-// ---------------------------------------------------------------------------
 const styles = {
   container: { padding: '4px 0', fontSize: 14 },
   center: { textAlign: 'center', padding: 24 },
