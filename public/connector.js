@@ -1,28 +1,73 @@
 /**
  * connector.js – Registers the Time Tracker Power-Up with Trello.
  *
- * IMPORTANT: This file must NOT use ES module imports because it runs
- * directly in the Trello iframe context via a <script type="module"> tag.
- * In Vite dev mode, module imports trigger HMR client injection which can
- * interfere with TrelloPowerUp initialization timing.
+ * This file runs as a plain script (no ES modules) so we use
+ * fetch() against the Supabase REST API to read time data for badges.
  *
- * All helper functions are inlined here to avoid import issues.
+ * IMPORTANT: SUPABASE_URL and SUPABASE_KEY are replaced at build time
+ * or must be set here manually for local dev. See instructions below.
  */
 
-// Base URL – in dev this is the ngrok/localhost URL
 var BASE = window.location.origin;
 
+// ── Supabase config ──────────────────────────────────────────────
+// These will be set by the build-time injection script.
+// For local dev, replace these values with your actual Supabase credentials.
+var SUPABASE_URL = '%%VITE_SUPABASE_URL%%';
+var SUPABASE_KEY = '%%VITE_SUPABASE_ANON_KEY%%';
+
 // ---------------------------------------------------------------------------
-// Storage helpers (inlined to avoid import issues in connector context)
+// Supabase REST helpers (no SDK needed)
 // ---------------------------------------------------------------------------
 
-var TRACKING_KEY = 'timeTracking';
-
-function getCardTimeData(t) {
-  return t.get('card', 'shared', TRACKING_KEY)
-    .then(function(data) { return data || {}; })
-    .catch(function() { return {}; });
+function supabaseGet(table, params) {
+  var url = SUPABASE_URL + '/rest/v1/' + table + '?' + params;
+  return fetch(url, {
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Accept': 'application/json',
+    },
+  })
+    .then(function (res) { return res.json(); })
+    .catch(function (err) {
+      console.error('[TimeTracker] Supabase fetch error:', err);
+      return [];
+    });
 }
+
+function getCardTimeData(cardId) {
+  return Promise.all([
+    supabaseGet('time_entries', 'select=member_id,member_name,duration_ms&card_id=eq.' + cardId),
+    supabaseGet('active_timers', 'select=member_id,member_name,started_at&card_id=eq.' + cardId),
+  ]).then(function (results) {
+    var entries = results[0] || [];
+    var actives = results[1] || [];
+    var data = {};
+
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (!data[e.member_id]) {
+        data[e.member_id] = { name: e.member_name, totalMs: 0, activeStart: null };
+      }
+      data[e.member_id].totalMs += e.duration_ms || 0;
+    }
+
+    for (var j = 0; j < actives.length; j++) {
+      var a = actives[j];
+      if (!data[a.member_id]) {
+        data[a.member_id] = { name: a.member_name, totalMs: 0, activeStart: null };
+      }
+      data[a.member_id].activeStart = new Date(a.started_at).getTime();
+    }
+
+    return data;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Formatting helpers
+// ---------------------------------------------------------------------------
 
 function formatDuration(ms, short) {
   if (!ms || ms < 0) return short ? '0m' : '0m 0s';
@@ -74,62 +119,62 @@ function hasActiveTimer(timeData) {
 // ---------------------------------------------------------------------------
 
 console.log('[TimeTracker] Connector loading, BASE =', BASE);
+console.log('[TimeTracker] Supabase URL =', SUPABASE_URL ? 'configured' : 'MISSING');
 
 if (!window.TrelloPowerUp) {
   console.error('[TimeTracker] FATAL: window.TrelloPowerUp not found!');
 } else {
-  console.log('[TimeTracker] TrelloPowerUp found, initializing...');
-
   window.TrelloPowerUp.initialize(
     {
-      // ── Card Badges (front of card in board view) ───────────
-      'card-badges': function(t) {
-        return getCardTimeData(t).then(function(data) {
-          var total = cardTotalMs(data);
-          var active = hasActiveTimer(data);
-          if (total === 0 && !active) return [];
-          return [{
-            icon: BASE + '/clock-icon.svg',
-            text: formatDuration(total, true),
-            color: active ? 'red' : 'green',
-            refresh: 30,
-          }];
-        }).catch(function(e) {
+      'card-badges': function (t) {
+        return t.card('id').then(function (card) {
+          return getCardTimeData(card.id).then(function (data) {
+            var total = cardTotalMs(data);
+            var active = hasActiveTimer(data);
+            if (total === 0 && !active) return [];
+            return [{
+              icon: BASE + '/clock-icon.svg',
+              text: formatDuration(total, true),
+              color: active ? 'red' : 'green',
+              refresh: 30,
+            }];
+          });
+        }).catch(function (e) {
           console.error('[TimeTracker] card-badges error:', e);
           return [];
         });
       },
 
-      // ── Card Detail Badges (inside card view) ──────────────
-      'card-detail-badges': function(t) {
-        return getCardTimeData(t).then(function(data) {
-          var total = cardTotalMs(data);
-          var active = hasActiveTimer(data);
-          if (total === 0 && !active) return [];
-          return [{
-            title: 'Tid sporet',
-            text: formatDuration(total, false),
-            color: active ? 'red' : 'green',
-            callback: function(tc) {
-              return tc.popup({
-                title: 'Tidstracker',
-                url: BASE + '/timer.html',
-                height: 400,
-              });
-            },
-          }];
-        }).catch(function(e) {
+      'card-detail-badges': function (t) {
+        return t.card('id').then(function (card) {
+          return getCardTimeData(card.id).then(function (data) {
+            var total = cardTotalMs(data);
+            var active = hasActiveTimer(data);
+            if (total === 0 && !active) return [];
+            return [{
+              title: 'Tid sporet',
+              text: formatDuration(total, false),
+              color: active ? 'red' : 'green',
+              callback: function (tc) {
+                return tc.popup({
+                  title: 'Tidstracker',
+                  url: BASE + '/timer.html',
+                  height: 400,
+                });
+              },
+            }];
+          });
+        }).catch(function (e) {
           console.error('[TimeTracker] card-detail-badges error:', e);
           return [];
         });
       },
 
-      // ── Card Buttons (sidebar in card detail) ──────────────
-      'card-buttons': function(t) {
+      'card-buttons': function (t) {
         return [{
           icon: BASE + '/clock-icon.svg',
           text: 'Tidstracker',
-          callback: function(tc) {
+          callback: function (tc) {
             return tc.popup({
               title: 'Tidstracker',
               url: BASE + '/timer.html',
@@ -139,14 +184,13 @@ if (!window.TrelloPowerUp) {
         }];
       },
 
-      // ── Board Buttons (board header bar) ───────────────────
-      'board-buttons': function(t) {
+      'board-buttons': function (t) {
         return [{
           icon: BASE + '/clock-icon.svg',
           text: 'Tidsrapport',
-          callback: function(tc) {
+          callback: function (tc) {
             return tc.modal({
-              title: 'Tidsrapport – Hele boardet',
+              title: 'Tidsrapport - Hele boardet',
               url: BASE + '/report.html',
               fullscreen: true,
             });
@@ -154,19 +198,15 @@ if (!window.TrelloPowerUp) {
         }];
       },
 
-      // ── Settings ───────────────────────────────────────────
-      'show-settings': function(t) {
+      'show-settings': function (t) {
         return t.popup({
-          title: 'Tidstracker – Innstillinger',
+          title: 'Tidstracker - Innstillinger',
           url: BASE + '/settings.html',
           height: 300,
         });
       },
     },
-    {
-      appKey: '',
-      appName: 'Time Tracker',
-    }
+    { appKey: '', appName: 'Time Tracker' }
   );
 
   console.log('[TimeTracker] Initialization complete!');
