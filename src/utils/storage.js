@@ -1,238 +1,272 @@
 /**
- * storage.js – Abstraction over Trello Power-Up storage.
+ * storage.js – Time tracking data operations backed by Supabase.
  *
  * DATA MODEL
  * ----------
- * We store time-tracking data at the CARD level in "shared" scope so that
- * every board member can see everyone's tracked time.
+ * Two tables:
  *
- * Key: "timeTracking"
- * Value: {
- *   [memberId: string]: {
- *     name: string,          // Display name of the member
- *     totalMs: number,       // Accumulated completed time in ms
- *     activeStart: number|null, // Timestamp (ms) when current session started, or null
- *   }
- * }
+ * time_entries: Completed sessions (one row per start->stop)
+ *   - board_id, card_id, card_name, list_name, member_id, member_name
+ *   - started_at, ended_at, duration_ms, labels (jsonb)
  *
- * Trello shared storage limit is 4096 chars per key per card.
- * This compact format keeps us well within limits for typical teams (< 20 members).
- *
- * SESSION HISTORY (optional, private scope per member):
- * Key: "timeSessions"
- * Value: [{ start: number, end: number, durationMs: number }]
- * Kept for detailed per-user history. Trimmed to last 50 entries to stay within limits.
+ * active_timers: Currently running timers (max one per member per card)
+ *   - board_id, card_id, member_id, member_name, started_at
  */
 
-const TRACKING_KEY = 'timeTracking';
-const SESSIONS_KEY = 'timeSessions';
-const MAX_SESSIONS = 50;
+import { supabase } from './supabase.js';
 
 // ---------------------------------------------------------------------------
-// Read helpers
+// Timer operations (per card, per member)
 // ---------------------------------------------------------------------------
 
 /**
- * Get all time-tracking data for a card.
- * @param {object} t – Trello Power-Up client instance
- * @returns {Promise<Object>} { [memberId]: { name, totalMs, activeStart } }
- */
-export async function getCardTimeData(t) {
-  try {
-    const data = await t.get('card', 'shared', TRACKING_KEY);
-    return data || {};
-  } catch {
-    return {};
-  }
-}
-
-/**
- * Get session history for the current member on a card.
- * @param {object} t
- * @returns {Promise<Array>}
- */
-export async function getMySessions(t) {
-  try {
-    const data = await t.get('card', 'private', SESSIONS_KEY);
-    return data || [];
-  } catch {
-    return [];
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Write helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Start the timer for the current member on this card.
- * @param {object} t
+ * Start a timer for the current member on a card.
  */
 export async function startTimer(t) {
   const member = await t.member('id', 'fullName');
-  const data = await getCardTimeData(t);
+  const card = await t.card('id', 'name');
+  const board = await t.board('id');
 
-  const entry = data[member.id] || { name: member.fullName, totalMs: 0, activeStart: null };
+  // Check if already running
+  const { data: existing } = await supabase
+    .from('active_timers')
+    .select('id')
+    .eq('card_id', card.id)
+    .eq('member_id', member.id)
+    .maybeSingle();
 
-  // Don't restart if already running
-  if (entry.activeStart) return data;
+  if (existing) return;
 
-  entry.name = member.fullName; // keep name in sync
-  entry.activeStart = Date.now();
-  data[member.id] = entry;
+  const { error } = await supabase.from('active_timers').insert({
+    board_id: board.id,
+    card_id: card.id,
+    member_id: member.id,
+    member_name: member.fullName,
+    started_at: new Date().toISOString(),
+  });
 
-  await t.set('card', 'shared', TRACKING_KEY, data);
-  return data;
+  if (error) console.error('[TimeTracker] startTimer error:', error);
 }
 
 /**
- * Stop the timer for the current member, accumulating elapsed time.
- * @param {object} t
+ * Stop the timer for the current member on a card.
+ * Moves the active timer into a completed time_entry.
  */
 export async function stopTimer(t) {
   const member = await t.member('id', 'fullName');
-  const data = await getCardTimeData(t);
-  const entry = data[member.id];
+  const card = await t.card('id', 'name');
+  const board = await t.board('id');
+  const list = await t.list('id', 'name');
+  const cardData = await t.card('labels');
 
-  if (!entry || !entry.activeStart) return data;
+  // Find active timer
+  const { data: active } = await supabase
+    .from('active_timers')
+    .select('*')
+    .eq('card_id', card.id)
+    .eq('member_id', member.id)
+    .maybeSingle();
 
-  const elapsed = Date.now() - entry.activeStart;
-  entry.totalMs = (entry.totalMs || 0) + elapsed;
-  entry.activeStart = null;
-  data[member.id] = entry;
+  if (!active) return;
 
-  await t.set('card', 'shared', TRACKING_KEY, data);
+  const endedAt = new Date();
+  const startedAt = new Date(active.started_at);
+  const durationMs = endedAt.getTime() - startedAt.getTime();
 
-  // Also save session to private history
-  await _appendSession(t, { start: Date.now() - elapsed, end: Date.now(), durationMs: elapsed });
+  // Insert completed entry
+  const { error: insertError } = await supabase.from('time_entries').insert({
+    board_id: board.id,
+    card_id: card.id,
+    card_name: card.name,
+    list_name: list.name,
+    member_id: member.id,
+    member_name: member.fullName,
+    started_at: active.started_at,
+    ended_at: endedAt.toISOString(),
+    duration_ms: durationMs,
+    labels: cardData.labels || [],
+  });
 
-  return data;
+  if (insertError) {
+    console.error('[TimeTracker] stopTimer insert error:', insertError);
+    return;
+  }
+
+  // Remove active timer
+  await supabase.from('active_timers').delete().eq('id', active.id);
 }
 
 /**
  * Toggle timer: start if stopped, stop if running.
- * @param {object} t
- * @returns {Promise<{ data: Object, running: boolean }>}
  */
 export async function toggleTimer(t) {
   const member = await t.member('id');
-  const data = await getCardTimeData(t);
-  const entry = data[member.id];
-  const isRunning = entry?.activeStart != null;
+  const card = await t.card('id');
 
-  if (isRunning) {
-    const newData = await stopTimer(t);
-    return { data: newData, running: false };
+  const { data: active } = await supabase
+    .from('active_timers')
+    .select('id')
+    .eq('card_id', card.id)
+    .eq('member_id', member.id)
+    .maybeSingle();
+
+  if (active) {
+    await stopTimer(t);
+    return { running: false };
   } else {
-    const newData = await startTimer(t);
-    return { data: newData, running: true };
+    await startTimer(t);
+    return { running: true };
   }
 }
 
 /**
- * Manually adjust time for the current member.
- * @param {object} t
- * @param {number} deltaMs – Positive to add, negative to subtract
+ * Manually add or subtract time for the current member.
  */
 export async function adjustTime(t, deltaMs) {
   const member = await t.member('id', 'fullName');
-  const data = await getCardTimeData(t);
+  const card = await t.card('id', 'name');
+  const board = await t.board('id');
+  const list = await t.list('id', 'name');
+  const cardData = await t.card('labels');
 
-  const entry = data[member.id] || { name: member.fullName, totalMs: 0, activeStart: null };
-  entry.name = member.fullName;
-  entry.totalMs = Math.max(0, (entry.totalMs || 0) + deltaMs);
-  data[member.id] = entry;
+  const now = new Date().toISOString();
 
-  await t.set('card', 'shared', TRACKING_KEY, data);
-  return data;
-}
+  const { error } = await supabase.from('time_entries').insert({
+    board_id: board.id,
+    card_id: card.id,
+    card_name: card.name,
+    list_name: list.name,
+    member_id: member.id,
+    member_name: member.fullName,
+    started_at: now,
+    ended_at: now,
+    duration_ms: deltaMs,
+    labels: cardData.labels || [],
+  });
 
-/**
- * Set total time for a specific member directly (admin override).
- * @param {object} t
- * @param {string} memberId
- * @param {number} totalMs
- */
-export async function setMemberTime(t, memberId, totalMs) {
-  const data = await getCardTimeData(t);
-  if (data[memberId]) {
-    data[memberId].totalMs = Math.max(0, totalMs);
-    await t.set('card', 'shared', TRACKING_KEY, data);
-  }
-  return data;
-}
-
-/**
- * Clear all time data for a card (use with caution).
- * @param {object} t
- */
-export async function clearCardTime(t) {
-  await t.set('card', 'shared', TRACKING_KEY, {});
+  if (error) console.error('[TimeTracker] adjustTime error:', error);
 }
 
 // ---------------------------------------------------------------------------
-// Board-level aggregation (for reports)
+// Read operations (per card)
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch time data for ALL cards on the board.
- * Reads each card's shared storage individually since pluginData
- * is not accessible via t.cards() in the iframe context.
- *
- * @param {object} t
- * @returns {Promise<Array<{ cardId, cardName, listName, labels, timeData }>>}
+ * Get all time data for a specific card, grouped by member.
+ * Returns same shape as before: { [memberId]: { name, totalMs, activeStart } }
  */
-export async function getBoardTimeReport(t) {
-  const cards = await t.cards('id', 'name', 'idList', 'labels');
-  const lists = await t.lists('id', 'name');
-  const listMap = Object.fromEntries(lists.map((l) => [l.id, l.name]));
+export async function getCardTimeData(t) {
+  const card = await t.card('id');
+  const result = {};
 
-  const results = [];
+  // Get completed time per member
+  const { data: entries } = await supabase
+    .from('time_entries')
+    .select('member_id, member_name, duration_ms')
+    .eq('card_id', card.id);
 
-  // Read time data for each card individually
-  // Process in batches of 10 to avoid overwhelming the API
-  const BATCH_SIZE = 10;
-  for (let i = 0; i < cards.length; i += BATCH_SIZE) {
-    const batch = cards.slice(i, i + BATCH_SIZE);
-    const batchResults = await Promise.all(
-      batch.map(async (card) => {
-        try {
-          const timeData = await t.get(card.id, 'shared', TRACKING_KEY);
-          return { card, timeData: timeData || {} };
-        } catch {
-          return { card, timeData: {} };
-        }
-      })
-    );
-
-    for (const { card, timeData } of batchResults) {
-      if (Object.keys(timeData).length > 0) {
-        results.push({
-          cardId: card.id,
-          cardName: card.name,
-          listName: listMap[card.idList] || 'Ukjent',
-          labels: card.labels || [],
-          timeData,
-        });
+  if (entries) {
+    for (const entry of entries) {
+      if (!result[entry.member_id]) {
+        result[entry.member_id] = { name: entry.member_name, totalMs: 0, activeStart: null };
       }
+      result[entry.member_id].totalMs += entry.duration_ms || 0;
+      result[entry.member_id].name = entry.member_name;
     }
   }
 
-  return results;
+  // Get active timers
+  const { data: actives } = await supabase
+    .from('active_timers')
+    .select('member_id, member_name, started_at')
+    .eq('card_id', card.id);
+
+  if (actives) {
+    for (const active of actives) {
+      if (!result[active.member_id]) {
+        result[active.member_id] = { name: active.member_name, totalMs: 0, activeStart: null };
+      }
+      result[active.member_id].activeStart = new Date(active.started_at).getTime();
+    }
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------
-// Internal helpers
+// Board-level report
 // ---------------------------------------------------------------------------
 
-async function _appendSession(t, session) {
-  try {
-    const sessions = await getMySessions(t);
-    sessions.push(session);
-    // Trim to keep within storage limits
-    const trimmed = sessions.slice(-MAX_SESSIONS);
-    await t.set('card', 'private', SESSIONS_KEY, trimmed);
-  } catch {
-    // Non-critical – don't break the timer if session save fails
+/**
+ * Fetch time report for the entire board.
+ * Supports optional date filtering.
+ */
+export async function getBoardTimeReport(t, filters = {}) {
+  const board = await t.board('id');
+
+  let query = supabase
+    .from('time_entries')
+    .select('card_id, card_name, list_name, member_id, member_name, duration_ms, labels, started_at')
+    .eq('board_id', board.id)
+    .order('started_at', { ascending: false });
+
+  if (filters.from) query = query.gte('started_at', filters.from);
+  if (filters.to) query = query.lte('started_at', filters.to);
+
+  const { data: entries, error } = await query;
+  if (error) throw error;
+
+  // Also get active timers
+  const { data: actives } = await supabase
+    .from('active_timers')
+    .select('card_id, member_id, member_name, started_at')
+    .eq('board_id', board.id);
+
+  // Group by card
+  const cardMap = new Map();
+
+  for (const entry of entries || []) {
+    if (!cardMap.has(entry.card_id)) {
+      cardMap.set(entry.card_id, {
+        cardId: entry.card_id,
+        cardName: entry.card_name,
+        listName: entry.list_name,
+        labels: entry.labels || [],
+        timeData: {},
+      });
+    }
+    const card = cardMap.get(entry.card_id);
+    if (!card.timeData[entry.member_id]) {
+      card.timeData[entry.member_id] = { name: entry.member_name, totalMs: 0, activeStart: null };
+    }
+    card.timeData[entry.member_id].totalMs += entry.duration_ms || 0;
   }
+
+  for (const active of actives || []) {
+    if (!cardMap.has(active.card_id)) {
+      cardMap.set(active.card_id, {
+        cardId: active.card_id,
+        cardName: '(aktiv)',
+        listName: '',
+        labels: [],
+        timeData: {},
+      });
+    }
+    const card = cardMap.get(active.card_id);
+    if (!card.timeData[active.member_id]) {
+      card.timeData[active.member_id] = { name: active.member_name, totalMs: 0, activeStart: null };
+    }
+    card.timeData[active.member_id].activeStart = new Date(active.started_at).getTime();
+  }
+
+  return Array.from(cardMap.values());
+}
+
+/**
+ * Clear all time data for a card.
+ */
+export async function clearCardTime(t) {
+  const card = await t.card('id');
+  await supabase.from('time_entries').delete().eq('card_id', card.id);
+  await supabase.from('active_timers').delete().eq('card_id', card.id);
 }
