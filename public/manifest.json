@@ -1,0 +1,16 @@
+{
+  "name": "Time Tracker",
+  "details": "Open-source time tracking Power-Up. Track time per card, per person, view reports with charts, and export to CSV/JSON.",
+  "icon": {
+    "url": "./clock-icon.svg"
+  },
+  "author": "Open Source Community",
+  "capabilities": [
+    "card-badges",
+    "card-detail-badges",
+    "card-buttons",
+    "board-buttons",
+    "show-settings"
+  ],
+  "connectorUrl": "./index.html"
+}
