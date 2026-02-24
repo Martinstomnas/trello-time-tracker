@@ -11,6 +11,7 @@ export default function TimerApp({ t }) {
   const [memberName, setMemberName] = useState('');
   const [now, setNow] = useState(Date.now());
   const [manualInput, setManualInput] = useState('');
+  const [manualDate, setManualDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const tickRef = useRef(null);
@@ -76,23 +77,23 @@ export default function TimerApp({ t }) {
     const ms = parseDuration(manualInput);
     if (ms > 0) {
       setSaving(true);
-      await adjustTime(t, ms);
+      await adjustTime(t, ms, manualDate || undefined);
       await refreshData();
       setManualInput('');
       setSaving(false);
     }
-  }, [t, manualInput, refreshData]);
+  }, [t, manualInput, manualDate, refreshData]);
 
   const handleManualSubtract = useCallback(async () => {
     const ms = parseDuration(manualInput);
     if (ms > 0) {
       setSaving(true);
-      await adjustTime(t, -ms);
+      await adjustTime(t, -ms, manualDate || undefined);
       await refreshData();
       setManualInput('');
       setSaving(false);
     }
-  }, [t, manualInput, refreshData]);
+  }, [t, manualInput, manualDate, refreshData]);
 
   if (loading) {
     return <div style={styles.center}>Laster...</div>;
@@ -147,6 +148,16 @@ export default function TimerApp({ t }) {
           <button onClick={handleManualSubtract} style={styles.smallBtnRed} disabled={saving} title="Trekk fra tid">
             −
           </button>
+        </div>
+        <div style={styles.dateRow}>
+          <input
+            type="date"
+            value={manualDate}
+            onChange={(e) => setManualDate(e.target.value)}
+            style={styles.dateInput}
+            disabled={saving}
+          />
+          <span style={styles.dateHint}>{manualDate ? '' : 'Dato (valgfritt – standard er i dag)'}</span>
         </div>
       </div>
 
@@ -224,6 +235,15 @@ const styles = {
   section: { marginTop: 12, borderTop: '1px solid #DFE1E6', paddingTop: 10 },
   sectionTitle: { fontSize: 12, fontWeight: 600, color: '#5E6C84', textTransform: 'uppercase', marginBottom: 6 },
   manualRow: { display: 'flex', gap: 6, alignItems: 'center' },
+  dateRow: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 },
+  dateInput: {
+    padding: '5px 8px',
+    border: '1px solid #DFE1E6',
+    borderRadius: 4,
+    fontSize: 13,
+    color: '#172B4D',
+  },
+  dateHint: { fontSize: 12, color: '#A5ADBA' },
   input: {
     flex: 1,
     padding: '6px 8px',

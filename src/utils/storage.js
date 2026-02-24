@@ -121,15 +121,21 @@ export async function toggleTimer(t) {
 
 /**
  * Manually add or subtract time for the current member.
+ * @param {object} t
+ * @param {number} deltaMs – Positive to add, negative to subtract
+ * @param {string} [dateStr] – Optional date string (YYYY-MM-DD). Defaults to today.
  */
-export async function adjustTime(t, deltaMs) {
+export async function adjustTime(t, deltaMs, dateStr) {
   const member = await t.member('id', 'fullName');
   const card = await t.card('id', 'name');
   const board = await t.board('id');
   const list = await t.list('id', 'name');
   const cardData = await t.card('labels');
 
-  const now = new Date().toISOString();
+  // Use provided date at noon, or current time
+  const now = dateStr
+    ? new Date(dateStr + 'T12:00:00').toISOString()
+    : new Date().toISOString();
 
   const { error } = await supabase.from('time_entries').insert({
     board_id: board.id,
