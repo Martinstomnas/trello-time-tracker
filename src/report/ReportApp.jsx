@@ -1,46 +1,142 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { getBoardTimeReport } from '../utils/storage.js';
 import { formatDuration, getTotalWithActive } from '../utils/time.js';
-import { downloadCSV, downloadJSON, flattenReportData } from '../utils/export.js';
+import { downloadCSV, downloadJSON } from '../utils/export.js';
 import ReportChart from '../components/ReportChart.jsx';
 
 /**
  * ReportApp – Full-screen modal showing time data aggregated across all board cards.
  *
  * Supports:
+ * - Date range filtering (presets + custom)
  * - Grouping by card / person / label
  * - Sorting by name or time
  * - Bar and pie chart visualization
- * - CSV & JSON export
+ * - CSV & JSON export (respects active filters)
  */
+
+// ── Date range presets ────────────────────────────────────────────
+function getPresetRange(preset) {
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  switch (preset) {
+    case 'today':
+      return { from: startOfDay.toISOString(), to: now.toISOString(), label: 'I dag' };
+
+    case 'yesterday': {
+      const yesterday = new Date(startOfDay);
+      yesterday.setDate(yesterday.getDate() - 1);
+      return { from: yesterday.toISOString(), to: startOfDay.toISOString(), label: 'I går' };
+    }
+
+    case 'this-week': {
+      const day = startOfDay.getDay();
+      const diff = day === 0 ? 6 : day - 1; // Monday as start of week
+      const monday = new Date(startOfDay);
+      monday.setDate(monday.getDate() - diff);
+      return { from: monday.toISOString(), to: now.toISOString(), label: 'Denne uken' };
+    }
+
+    case 'last-week': {
+      const day = startOfDay.getDay();
+      const diff = day === 0 ? 6 : day - 1;
+      const thisMonday = new Date(startOfDay);
+      thisMonday.setDate(thisMonday.getDate() - diff);
+      const lastMonday = new Date(thisMonday);
+      lastMonday.setDate(lastMonday.getDate() - 7);
+      return { from: lastMonday.toISOString(), to: thisMonday.toISOString(), label: 'Forrige uke' };
+    }
+
+    case 'this-month': {
+      const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { from: firstOfMonth.toISOString(), to: now.toISOString(), label: 'Denne måneden' };
+    }
+
+    case 'last-month': {
+      const firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const firstOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      return { from: firstOfLastMonth.toISOString(), to: firstOfThisMonth.toISOString(), label: 'Forrige måned' };
+    }
+
+    case 'this-year': {
+      const firstOfYear = new Date(now.getFullYear(), 0, 1);
+      return { from: firstOfYear.toISOString(), to: now.toISOString(), label: 'I år' };
+    }
+
+    case 'all':
+    default:
+      return { from: null, to: null, label: 'All tid' };
+  }
+}
+
+function formatDateInput(isoString) {
+  if (!isoString) return '';
+  return isoString.slice(0, 10); // YYYY-MM-DD
+}
+
 export default function ReportApp({ t }) {
   const [reportData, setReportData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [groupBy, setGroupBy] = useState('card'); // card | person | label
-  const [sortBy, setSortBy] = useState('time');   // time | name
-  const [chartType, setChartType] = useState('bar'); // bar | pie
-  const [view, setView] = useState('table'); // table | chart
+  const [groupBy, setGroupBy] = useState('card');
+  const [sortBy, setSortBy] = useState('time');
+  const [chartType, setChartType] = useState('bar');
+  const [view, setView] = useState('table');
 
-  // Fetch data on mount
-  useEffect(() => {
-    async function load() {
-      try {
-        const data = await getBoardTimeReport(t);
-        setReportData(data);
-      } catch (err) {
-        console.error('Report load error:', err);
-        setError('Kunne ikke laste tidsdata. Prøv igjen.');
-      } finally {
-        setLoading(false);
-      }
+  // Date filtering
+  const [datePreset, setDatePreset] = useState('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [activeLabel, setActiveLabel] = useState('All tid');
+
+  // Build filters from state
+  const getFilters = useCallback(() => {
+    if (datePreset === 'custom') {
+      return {
+        from: customFrom ? new Date(customFrom).toISOString() : null,
+        to: customTo ? new Date(customTo + 'T23:59:59').toISOString() : null,
+      };
     }
-    load();
-  }, [t]);
+    const range = getPresetRange(datePreset);
+    return { from: range.from, to: range.to };
+  }, [datePreset, customFrom, customTo]);
+
+  // Fetch data
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const filters = getFilters();
+      const data = await getBoardTimeReport(t, filters);
+      setReportData(data);
+    } catch (err) {
+      console.error('Report load error:', err);
+      setError('Kunne ikke laste tidsdata. Prøv igjen.');
+    } finally {
+      setLoading(false);
+    }
+  }, [t, getFilters]);
+
+  // Load on mount and when filters change
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Handle preset change
+  const handlePresetChange = (preset) => {
+    setDatePreset(preset);
+    const range = getPresetRange(preset);
+    setActiveLabel(range.label);
+    if (preset !== 'custom') {
+      setCustomFrom('');
+      setCustomTo('');
+    }
+  };
 
   // ── Aggregate data based on groupBy ──────────────────────────────
   const aggregated = useMemo(() => {
-    const map = new Map(); // key → { label, totalMs, items }
+    const map = new Map();
 
     for (const card of reportData) {
       for (const [memberId, mData] of Object.entries(card.timeData)) {
@@ -70,18 +166,14 @@ export default function ReportApp({ t }) {
     }
 
     let results = Array.from(map.values());
-
-    // Sort
     if (sortBy === 'time') {
       results.sort((a, b) => b.totalMs - a.totalMs);
     } else {
       results.sort((a, b) => a.label.localeCompare(b.label));
     }
-
     return results;
   }, [reportData, groupBy, sortBy]);
 
-  // Grand total
   const grandTotal = aggregated.reduce((s, r) => s + r.totalMs, 0);
 
   if (loading) {
@@ -94,15 +186,63 @@ export default function ReportApp({ t }) {
 
   return (
     <div style={styles.container}>
-      {/* ── Header ─────────────────────────────── */}
+      {/* Header */}
       <div style={styles.header}>
         <h2 style={styles.title}>Tidsrapport</h2>
         <div style={styles.totalBadge}>
-          Totalt: <strong>{formatDuration(grandTotal)}</strong>
+          {activeLabel}: <strong>{formatDuration(grandTotal)}</strong>
         </div>
       </div>
 
-      {/* ── Controls ───────────────────────────── */}
+      {/* Date filter bar */}
+      <div style={styles.dateBar}>
+        <div style={styles.datePresets}>
+          {[
+            ['all', 'Alt'],
+            ['today', 'I dag'],
+            ['yesterday', 'I går'],
+            ['this-week', 'Denne uken'],
+            ['last-week', 'Forrige uke'],
+            ['this-month', 'Denne mnd'],
+            ['last-month', 'Forrige mnd'],
+            ['this-year', 'I år'],
+            ['custom', 'Egendefinert'],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => handlePresetChange(key)}
+              style={datePreset === key ? styles.datePresetActive : styles.datePresetBtn}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {datePreset === 'custom' && (
+          <div style={styles.customDateRow}>
+            <label style={styles.dateLabel}>
+              Fra:
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                style={styles.dateInput}
+              />
+            </label>
+            <label style={styles.dateLabel}>
+              Til:
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                style={styles.dateInput}
+              />
+            </label>
+          </div>
+        )}
+      </div>
+
+      {/* Controls */}
       <div style={styles.controls}>
         <div style={styles.controlGroup}>
           <label style={styles.label}>Grupper etter:</label>
@@ -159,9 +299,11 @@ export default function ReportApp({ t }) {
         </div>
       </div>
 
-      {/* ── Content ────────────────────────────── */}
+      {/* Content */}
       {aggregated.length === 0 ? (
-        <div style={styles.empty}>Ingen tidsdata funnet på dette boardet.</div>
+        <div style={styles.empty}>
+          Ingen tidsdata funnet{datePreset !== 'all' ? ' for valgt periode' : ' på dette boardet'}.
+        </div>
       ) : view === 'table' ? (
         <table style={styles.table}>
           <thead>
@@ -223,96 +365,82 @@ export default function ReportApp({ t }) {
   );
 }
 
-// ---------------------------------------------------------------------------
 // Trello label color mapping
-// ---------------------------------------------------------------------------
 function trelloLabelColor(color) {
   const map = {
-    green: '#61BD4F',
-    yellow: '#F2D600',
-    orange: '#FF9F1A',
-    red: '#EB5A46',
-    purple: '#C377E0',
-    blue: '#0079BF',
-    sky: '#00C2E0',
-    lime: '#51E898',
-    pink: '#FF78CB',
-    black: '#344563',
-    gray: '#B3BAC5',
+    green: '#61BD4F', yellow: '#F2D600', orange: '#FF9F1A', red: '#EB5A46',
+    purple: '#C377E0', blue: '#0079BF', sky: '#00C2E0', lime: '#51E898',
+    pink: '#FF78CB', black: '#344563', gray: '#B3BAC5',
   };
   return map[color] || '#B3BAC5';
 }
 
-// ---------------------------------------------------------------------------
 // Styles
-// ---------------------------------------------------------------------------
 const styles = {
   container: { maxWidth: 960, margin: '0 auto', fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif' },
   center: { textAlign: 'center', padding: 48, fontSize: 16, color: '#5E6C84' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   title: { margin: 0, fontSize: 22, color: '#172B4D' },
   totalBadge: {
-    backgroundColor: '#E4F0F6',
-    color: '#0079BF',
-    padding: '6px 14px',
-    borderRadius: 6,
-    fontSize: 15,
+    backgroundColor: '#E4F0F6', color: '#0079BF', padding: '6px 14px', borderRadius: 6, fontSize: 15,
   },
+
+  // Date filter bar
+  dateBar: {
+    marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid #DFE1E6',
+  },
+  datePresets: {
+    display: 'flex', flexWrap: 'wrap', gap: 4,
+  },
+  datePresetBtn: {
+    padding: '6px 12px', border: '1px solid #DFE1E6', borderRadius: 4,
+    backgroundColor: '#fff', cursor: 'pointer', fontSize: 13, color: '#172B4D',
+  },
+  datePresetActive: {
+    padding: '6px 12px', border: '1px solid #0079BF', borderRadius: 4,
+    backgroundColor: '#E4F0F6', cursor: 'pointer', fontSize: 13, color: '#0079BF', fontWeight: 600,
+  },
+  customDateRow: {
+    display: 'flex', gap: 12, marginTop: 8, alignItems: 'center',
+  },
+  dateLabel: {
+    fontSize: 13, color: '#5E6C84', display: 'flex', alignItems: 'center', gap: 6,
+  },
+  dateInput: {
+    padding: '6px 10px', border: '1px solid #DFE1E6', borderRadius: 4, fontSize: 14,
+  },
+
+  // Controls
   controls: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 12,
-    alignItems: 'flex-end',
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottom: '1px solid #DFE1E6',
+    display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end',
+    marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid #DFE1E6',
   },
   controlGroup: { display: 'flex', flexDirection: 'column', gap: 4 },
   label: { fontSize: 11, fontWeight: 600, color: '#5E6C84', textTransform: 'uppercase' },
   select: {
-    padding: '6px 10px',
-    border: '1px solid #DFE1E6',
-    borderRadius: 4,
-    fontSize: 14,
-    backgroundColor: '#fff',
-    cursor: 'pointer',
+    padding: '6px 10px', border: '1px solid #DFE1E6', borderRadius: 4, fontSize: 14,
+    backgroundColor: '#fff', cursor: 'pointer',
   },
   toggleGroup: { display: 'flex', gap: 0 },
   toggle: {
-    padding: '6px 14px',
-    border: '1px solid #DFE1E6',
-    backgroundColor: '#fff',
-    cursor: 'pointer',
-    fontSize: 13,
+    padding: '6px 14px', border: '1px solid #DFE1E6', backgroundColor: '#fff',
+    cursor: 'pointer', fontSize: 13,
   },
   toggleActive: {
-    padding: '6px 14px',
-    border: '1px solid #0079BF',
-    backgroundColor: '#E4F0F6',
-    color: '#0079BF',
-    cursor: 'pointer',
-    fontSize: 13,
-    fontWeight: 600,
+    padding: '6px 14px', border: '1px solid #0079BF', backgroundColor: '#E4F0F6',
+    color: '#0079BF', cursor: 'pointer', fontSize: 13, fontWeight: 600,
   },
   exportBtn: {
-    padding: '6px 14px',
-    border: '1px solid #DFE1E6',
-    borderRadius: 4,
-    backgroundColor: '#fff',
-    cursor: 'pointer',
-    fontSize: 13,
-    marginLeft: 4,
+    padding: '6px 14px', border: '1px solid #DFE1E6', borderRadius: 4,
+    backgroundColor: '#fff', cursor: 'pointer', fontSize: 13, marginLeft: 4,
   },
+
+  // Content
   empty: { textAlign: 'center', padding: 48, color: '#5E6C84', fontSize: 15 },
   table: { width: '100%', borderCollapse: 'collapse' },
   th: {
-    textAlign: 'left',
-    fontSize: 11,
-    fontWeight: 600,
-    color: '#5E6C84',
-    textTransform: 'uppercase',
-    padding: '8px 10px',
-    borderBottom: '2px solid #DFE1E6',
+    textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#5E6C84',
+    textTransform: 'uppercase', padding: '8px 10px', borderBottom: '2px solid #DFE1E6',
   },
   td: { padding: '8px 10px', fontSize: 14, borderBottom: '1px solid #F4F5F7', color: '#172B4D' },
   tdSub: { padding: '8px 10px', fontSize: 13, borderBottom: '1px solid #F4F5F7', color: '#5E6C84' },
