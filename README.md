@@ -100,7 +100,7 @@ VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-publishable-key
 ```
 
-### 4. Run locally
+### 4. Run locally (optional - development only)
 
 ```bash
 npm run dev
