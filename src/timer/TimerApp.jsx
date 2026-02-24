@@ -12,6 +12,8 @@ export default function TimerApp({ t }) {
   const [now, setNow] = useState(Date.now());
   const [manualInput, setManualInput] = useState('');
   const [manualDate, setManualDate] = useState('');
+  const [manualMember, setManualMember] = useState('self');
+  const [boardMembers, setBoardMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const tickRef = useRef(null);
@@ -33,6 +35,13 @@ export default function TimerApp({ t }) {
       const member = await t.member('id', 'fullName');
       setMemberId(member.id);
       setMemberName(member.fullName);
+      // Fetch board members for the "adjust for others" dropdown
+      try {
+        const board = await t.board('members');
+        setBoardMembers(board.members || []);
+      } catch (e) {
+        console.warn('[TimeTracker] Could not fetch board members:', e);
+      }
       await refreshData();
       setLoading(false);
     }
@@ -73,27 +82,35 @@ export default function TimerApp({ t }) {
     setSaving(false);
   }, [t, isRunning, refreshData]);
 
+  // Get target member for manual adjustment
+  const getTargetMember = useCallback(() => {
+    if (manualMember === 'self') return undefined;
+    const m = boardMembers.find((bm) => bm.id === manualMember);
+    if (m) return { id: m.id, fullName: m.fullName };
+    return undefined;
+  }, [manualMember, boardMembers]);
+
   const handleManualAdd = useCallback(async () => {
     const ms = parseDuration(manualInput);
     if (ms > 0) {
       setSaving(true);
-      await adjustTime(t, ms, manualDate || undefined);
+      await adjustTime(t, ms, manualDate || undefined, getTargetMember());
       await refreshData();
       setManualInput('');
       setSaving(false);
     }
-  }, [t, manualInput, manualDate, refreshData]);
+  }, [t, manualInput, manualDate, getTargetMember, refreshData]);
 
   const handleManualSubtract = useCallback(async () => {
     const ms = parseDuration(manualInput);
     if (ms > 0) {
       setSaving(true);
-      await adjustTime(t, -ms, manualDate || undefined);
+      await adjustTime(t, -ms, manualDate || undefined, getTargetMember());
       await refreshData();
       setManualInput('');
       setSaving(false);
     }
-  }, [t, manualInput, manualDate, refreshData]);
+  }, [t, manualInput, manualDate, getTargetMember, refreshData]);
 
   if (loading) {
     return <div style={styles.center}>Laster...</div>;
@@ -132,7 +149,7 @@ export default function TimerApp({ t }) {
 
       {/* Manual adjustment */}
       <div style={styles.section}>
-        <div style={styles.sectionTitle}>Manuell registrering</div>
+        <div style={styles.sectionTitle}>Manuell justering</div>
         <div style={styles.manualRow}>
           <input
             type="text"
@@ -159,6 +176,24 @@ export default function TimerApp({ t }) {
           />
           <span style={styles.dateHint}>{manualDate ? '' : 'Dato (valgfritt – standard er i dag)'}</span>
         </div>
+        {boardMembers.length > 1 && (
+          <div style={styles.dateRow}>
+            <select
+              value={manualMember}
+              onChange={(e) => setManualMember(e.target.value)}
+              style={styles.memberSelect}
+              disabled={saving}
+            >
+              <option value="self">Meg selv</option>
+              {boardMembers
+                .filter((m) => m.id !== memberId)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>{m.fullName}</option>
+                ))}
+            </select>
+            <span style={styles.dateHint}>Person</span>
+          </div>
+        )}
       </div>
 
       {/* Per-person breakdown */}
@@ -244,6 +279,15 @@ const styles = {
     color: '#172B4D',
   },
   dateHint: { fontSize: 12, color: '#A5ADBA' },
+  memberSelect: {
+    padding: '5px 8px',
+    border: '1px solid #DFE1E6',
+    borderRadius: 4,
+    fontSize: 13,
+    color: '#172B4D',
+    backgroundColor: '#fff',
+    cursor: 'pointer',
+  },
   input: {
     flex: 1,
     padding: '6px 8px',

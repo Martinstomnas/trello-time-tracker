@@ -120,13 +120,14 @@ export async function toggleTimer(t) {
 }
 
 /**
- * Manually add or subtract time for the current member.
+ * Manually add or subtract time for a member.
  * @param {object} t
  * @param {number} deltaMs – Positive to add, negative to subtract
  * @param {string} [dateStr] – Optional date string (YYYY-MM-DD). Defaults to today.
+ * @param {{ id: string, fullName: string }} [targetMember] – Optional member to adjust for. Defaults to current user.
  */
-export async function adjustTime(t, deltaMs, dateStr) {
-  const member = await t.member('id', 'fullName');
+export async function adjustTime(t, deltaMs, dateStr, targetMember) {
+  const member = targetMember || await t.member('id', 'fullName');
   const card = await t.card('id', 'name');
   const board = await t.board('id');
   const list = await t.list('id', 'name');
