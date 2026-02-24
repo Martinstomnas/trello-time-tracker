@@ -132,7 +132,7 @@ export default function TimerApp({ t }) {
 
       {/* Manual adjustment */}
       <div style={styles.section}>
-        <div style={styles.sectionTitle}>Manuell justering</div>
+        <div style={styles.sectionTitle}>Manuell registrering</div>
         <div style={styles.manualRow}>
           <input
             type="text"

@@ -152,7 +152,7 @@ if (!window.TrelloPowerUp) {
             var active = hasActiveTimer(data);
             if (total === 0 && !active) return [];
             return [{
-              title: 'Tid sporet',
+              title: 'Registrert tid',
               text: formatDuration(total, false),
               color: active ? 'red' : 'green',
               callback: function (tc) {
@@ -190,7 +190,7 @@ if (!window.TrelloPowerUp) {
           text: 'Tidsrapport',
           callback: function (tc) {
             return tc.modal({
-              title: 'Tidsrapport - Hele boardet',
+              title: 'Tidsrapport',
               url: BASE + '/report.html',
               fullscreen: true,
             });
