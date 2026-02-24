@@ -177,7 +177,7 @@ trello-time-tracker/
 ├── vite.config.js          # Vite config with env injection plugin
 ├── package.json
 ├── .env.example            # Template for environment variables
-└── LICENSE                 # MIT License
+
 ```
 
 ## Data Model
