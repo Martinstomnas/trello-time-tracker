@@ -133,6 +133,28 @@ export async function adjustTime(t, deltaMs, dateStr, targetMember) {
   const list = await t.list('id', 'name');
   const cardData = await t.card('labels');
 
+  let actualDelta = deltaMs;
+  let capped = false;
+
+  // If subtracting, check current total and cap at zero
+  if (deltaMs < 0) {
+    const { data: entries } = await supabase
+      .from('time_entries')
+      .select('duration_ms')
+      .eq('card_id', card.id)
+      .eq('member_id', member.id);
+
+    const currentTotal = (entries || []).reduce((sum, e) => sum + (e.duration_ms || 0), 0);
+
+    if (currentTotal <= 0) {
+      return { capped: true };
+    }
+    if (currentTotal + deltaMs < 0) {
+      actualDelta = -currentTotal;
+      capped = true;
+    }
+  }
+
   // Use provided date at noon, or current time
   const now = dateStr
     ? new Date(dateStr + 'T12:00:00').toISOString()
@@ -147,11 +169,12 @@ export async function adjustTime(t, deltaMs, dateStr, targetMember) {
     member_name: member.fullName,
     started_at: now,
     ended_at: now,
-    duration_ms: deltaMs,
+    duration_ms: actualDelta,
     labels: cardData.labels || [],
   });
 
   if (error) console.error('[TimeTracker] adjustTime error:', error);
+  return { capped };
 }
 
 // ---------------------------------------------------------------------------
