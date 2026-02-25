@@ -207,13 +207,26 @@ export async function getCardTimeData(t) {
 /**
  * Fetch time report for the entire board.
  * Supports optional date filtering.
+ * Labels are fetched live from Trello (not from stored data) so changes are always reflected.
  */
 export async function getBoardTimeReport(t, filters = {}) {
   const board = await t.board('id');
 
+  // Fetch current card data from Trello for live labels and names
+  const trelloCards = await t.cards('id', 'name', 'idList', 'labels');
+  const trelloLists = await t.lists('id', 'name');
+  const listMap = Object.fromEntries(trelloLists.map((l) => [l.id, l.name]));
+  const cardInfoMap = Object.fromEntries(
+    trelloCards.map((c) => [c.id, {
+      name: c.name,
+      listName: listMap[c.idList] || '',
+      labels: c.labels || [],
+    }])
+  );
+
   let query = supabase
     .from('time_entries')
-    .select('card_id, card_name, list_name, member_id, member_name, duration_ms, labels, started_at')
+    .select('card_id, card_name, list_name, member_id, member_name, duration_ms, started_at')
     .eq('board_id', board.id)
     .order('started_at', { ascending: false });
 
@@ -234,11 +247,13 @@ export async function getBoardTimeReport(t, filters = {}) {
 
   for (const entry of entries || []) {
     if (!cardMap.has(entry.card_id)) {
+      // Use live Trello data if available, fall back to stored data
+      const live = cardInfoMap[entry.card_id];
       cardMap.set(entry.card_id, {
         cardId: entry.card_id,
-        cardName: entry.card_name,
-        listName: entry.list_name,
-        labels: entry.labels || [],
+        cardName: live?.name || entry.card_name,
+        listName: live?.listName || entry.list_name,
+        labels: live?.labels || [],
         timeData: {},
       });
     }
@@ -251,11 +266,12 @@ export async function getBoardTimeReport(t, filters = {}) {
 
   for (const active of actives || []) {
     if (!cardMap.has(active.card_id)) {
+      const live = cardInfoMap[active.card_id];
       cardMap.set(active.card_id, {
         cardId: active.card_id,
-        cardName: '(aktiv)',
-        listName: '',
-        labels: [],
+        cardName: live?.name || '(aktiv)',
+        listName: live?.listName || '',
+        labels: live?.labels || [],
         timeData: {},
       });
     }
