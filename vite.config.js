@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 
 /**
  * Custom plugin: injects VITE_ env vars into public/connector.js
@@ -43,7 +44,7 @@ function injectEnvPlugin() {
 }
 
 export default defineConfig({
-  plugins: [react(), injectEnvPlugin()],
+  plugins: [react(), basicSsl(), injectEnvPlugin()],
   build: {
     rollupOptions: {
       input: {

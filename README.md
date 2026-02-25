@@ -100,19 +100,23 @@ VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-publishable-key
 ```
 
-### 4. Run locally (optional - development only)
-
+### 4. Run locally (development)
 ```bash
 npm run dev
 ```
 
-For local development with Trello, you need HTTPS. Install the SSL plugin:
+This starts a local HTTPS server at `https://localhost:3000/`.
 
-```bash
-npm install -D @vitejs/plugin-basic-ssl
-```
+**First time:** Open `https://localhost:3000/connector.html` in your browser and accept the self-signed certificate warning.
 
-Then open `https://localhost:3000/connector.html` in your browser and accept the certificate warning.
+**Trello setup for local dev:**
+1. Go to [Power-Up Admin](https://trello.com/power-ups/admin)
+2. Create a separate Power-Up (e.g. "Time Tracker DEV")
+3. Set Iframe connector URL to: `https://localhost:3000/connector.html`
+4. Enable the same 5 capabilities as the production Power-Up
+5. Activate it on a test board
+
+This keeps your production Power-Up unaffected while you develop.
 
 ### 5. Deploy to Netlify
 
