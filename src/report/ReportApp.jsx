@@ -351,7 +351,7 @@ export default function ReportApp({ t }) {
                   {grandTotal > 0 ? ((row.totalMs / grandTotal) * 100).toFixed(1) + '%' : '—'}
                 </td>
                 {groupBy === 'card' && (
-                  <td style={{ ...styles.td, textAlign: 'center' }}>
+                  <td style={{ ...styles.td, textAlign: 'center', padding: '4px 6px', verticalAlign: 'middle' }}>
                     <button
                       onClick={() => setConfirmReset({ cardId: row.cardId, cardName: row.label })}
                       style={styles.resetBtn}
@@ -491,9 +491,10 @@ const styles = {
 
   // Reset button
   resetBtn: {
-    padding: '4px 10px', border: '1px solid #DFE1E6', borderRadius: 4,
+    padding: '2px 8px', border: '1px solid #DFE1E6', borderRadius: 4,
     backgroundColor: '#fff', cursor: 'pointer', fontSize: 12, color: '#5E6C84',
-  },
+    display: 'block', margin: '0 auto',
+},
 
   // Confirmation dialog
   overlay: {
