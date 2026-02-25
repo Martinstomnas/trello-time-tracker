@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { getBoardTimeReport } from '../utils/storage.js';
+import { getBoardTimeReport, resetCardTimeById } from '../utils/storage.js';
 import { formatDuration, getTotalWithActive } from '../utils/time.js';
 import { downloadCSV, downloadJSON } from '../utils/export.js';
 import ReportChart from '../components/ReportChart.jsx';
@@ -89,6 +89,7 @@ export default function ReportApp({ t }) {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [activeLabel, setActiveLabel] = useState('All tid');
+  const [confirmReset, setConfirmReset] = useState(null); // { cardId, cardName }
 
   // Build filters from state
   const getFilters = useCallback(() => {
@@ -145,7 +146,7 @@ export default function ReportApp({ t }) {
 
         if (groupBy === 'card') {
           const key = card.cardId;
-          const existing = map.get(key) || { label: card.cardName, totalMs: 0, sublabel: card.listName };
+          const existing = map.get(key) || { cardId: card.cardId, label: card.cardName, totalMs: 0, sublabel: card.listName };
           existing.totalMs += ms;
           map.set(key, existing);
         } else if (groupBy === 'person') {
@@ -175,6 +176,12 @@ export default function ReportApp({ t }) {
   }, [reportData, groupBy, sortBy]);
 
   const grandTotal = aggregated.reduce((s, r) => s + r.totalMs, 0);
+
+  const handleReset = useCallback(async (cardId) => {
+    await resetCardTimeById(cardId);
+    setConfirmReset(null);
+    await loadData();
+  }, [loadData]);
 
   if (loading) {
     return <div style={styles.center}>Laster rapport...</div>;
@@ -314,6 +321,7 @@ export default function ReportApp({ t }) {
               {groupBy === 'card' && <th style={styles.th}>Liste</th>}
               <th style={{ ...styles.th, textAlign: 'right' }}>Tid</th>
               <th style={{ ...styles.th, textAlign: 'right', width: 80 }}>Andel</th>
+              {groupBy === 'card' && <th style={{ ...styles.th, textAlign: 'center', width: 120 }}></th>}
             </tr>
           </thead>
           <tbody>
@@ -342,6 +350,16 @@ export default function ReportApp({ t }) {
                 <td style={{ ...styles.td, textAlign: 'right', color: '#5E6C84' }}>
                   {grandTotal > 0 ? ((row.totalMs / grandTotal) * 100).toFixed(1) + '%' : '—'}
                 </td>
+                {groupBy === 'card' && (
+                  <td style={{ ...styles.td, textAlign: 'center' }}>
+                    <button
+                      onClick={() => setConfirmReset({ cardId: row.cardId, cardName: row.label })}
+                      style={styles.resetBtn}
+                    >
+                      Tilbakestill tid
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -353,12 +371,37 @@ export default function ReportApp({ t }) {
                 {formatDuration(grandTotal)}
               </td>
               <td style={{ ...styles.td, textAlign: 'right' }}>100%</td>
+              {groupBy === 'card' && <td />}
             </tr>
           </tfoot>
         </table>
       ) : (
         <div style={styles.chartContainer}>
           <ReportChart data={aggregated} chartType={chartType} />
+        </div>
+      )}
+      {/* Confirmation dialog */}
+      {confirmReset && (
+        <div style={styles.overlay}>
+          <div style={styles.dialog}>
+            <p style={styles.dialogText}>
+              Er du sikker på at du vil tilbakestille all tid for <strong>{confirmReset.cardName}</strong>? Dette kan ikke angres.
+            </p>
+            <div style={styles.dialogButtons}>
+              <button
+                onClick={() => setConfirmReset(null)}
+                style={styles.dialogCancel}
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={() => handleReset(confirmReset.cardId)}
+                style={styles.dialogConfirm}
+              >
+                Tilbakestill
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -445,4 +488,31 @@ const styles = {
   td: { padding: '8px 10px', fontSize: 14, borderBottom: '1px solid #F4F5F7', color: '#172B4D' },
   tdSub: { padding: '8px 10px', fontSize: 13, borderBottom: '1px solid #F4F5F7', color: '#5E6C84' },
   chartContainer: { padding: '16px 0', maxHeight: 420 },
+
+  // Reset button
+  resetBtn: {
+    padding: '4px 10px', border: '1px solid #DFE1E6', borderRadius: 4,
+    backgroundColor: '#fff', cursor: 'pointer', fontSize: 12, color: '#5E6C84',
+  },
+
+  // Confirmation dialog
+  overlay: {
+    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex',
+    alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+  },
+  dialog: {
+    backgroundColor: '#fff', borderRadius: 8, padding: 24,
+    maxWidth: 400, width: '90%', boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+  },
+  dialogText: { fontSize: 15, color: '#172B4D', margin: '0 0 16px 0', lineHeight: 1.5 },
+  dialogButtons: { display: 'flex', justifyContent: 'flex-end', gap: 8 },
+  dialogCancel: {
+    padding: '8px 16px', border: '1px solid #DFE1E6', borderRadius: 4,
+    backgroundColor: '#fff', cursor: 'pointer', fontSize: 14, color: '#172B4D',
+  },
+  dialogConfirm: {
+    padding: '8px 16px', border: 'none', borderRadius: 4,
+    backgroundColor: '#EB5A46', cursor: 'pointer', fontSize: 14, color: '#fff', fontWeight: 600,
+  },
 };

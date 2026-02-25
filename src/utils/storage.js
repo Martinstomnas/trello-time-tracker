@@ -316,3 +316,15 @@ export async function clearCardTime(t) {
   await supabase.from('time_entries').delete().eq('card_id', card.id);
   await supabase.from('active_timers').delete().eq('card_id', card.id);
 }
+
+/**
+ * Reset all time data for a card by card_id.
+ * Works even if the card is archived/deleted in Trello.
+ * @param {string} cardId
+ */
+export async function resetCardTimeById(cardId) {
+  const { error: e1 } = await supabase.from('time_entries').delete().eq('card_id', cardId);
+  const { error: e2 } = await supabase.from('active_timers').delete().eq('card_id', cardId);
+  if (e1) console.error('[TimeTracker] resetCardTimeById entries error:', e1);
+  if (e2) console.error('[TimeTracker] resetCardTimeById timers error:', e2);
+}
