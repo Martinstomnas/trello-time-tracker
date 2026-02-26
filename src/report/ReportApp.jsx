@@ -340,6 +340,7 @@ export default function ReportApp({ t }) {
                 {groupBy === 'card' ? 'Kort' : groupBy === 'person' ? 'Person' : 'Label'}
               </th>
               {groupBy === 'card' && <th style={styles.th}>Liste</th>}
+              {groupBy === 'person' && <th style={styles.th}>Aktive kort</th>}
               <th style={{ ...styles.th, textAlign: 'right' }}>Tid</th>
               <th style={{ ...styles.th, textAlign: 'right', width: 80 }}>Andel</th>
               {groupBy === 'card' && <th style={{ ...styles.th, textAlign: 'center', width: 120 }}></th>}
@@ -365,6 +366,13 @@ export default function ReportApp({ t }) {
                   {row.label}
                 </td>
                 {groupBy === 'card' && <td style={styles.tdSub}>{row.sublabel || ''}</td>}
+                {groupBy === 'person' && (
+  <td style={styles.tdSub}>
+    {row.activeMembers?.length > 0
+      ? row.activeMembers.map((m) => m.cardName).join(', ')
+      : '—'}
+  </td>
+)}
                 <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600 }}>
                   {row.activeMembers?.length > 0 ? (
                     <span
@@ -398,6 +406,7 @@ export default function ReportApp({ t }) {
             <tr style={{ borderTop: '2px solid #DFE1E6' }}>
               <td style={{ ...styles.td, fontWeight: 700 }}>Totalt</td>
               {groupBy === 'card' && <td />}
+              {groupBy === 'person' && <td />}
               <td style={{ ...styles.td, textAlign: 'right', fontWeight: 700 }}>
                 {formatDuration(grandTotal)}
               </td>
