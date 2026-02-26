@@ -108,7 +108,7 @@ function getPresetRange(preset) {
 
     case "all":
     default:
-      return { from: null, to: null, label: "All tid" };
+      return { from: null, to: null, label: "Totalt" };
   }
 }
 
@@ -130,7 +130,7 @@ export default function ReportApp({ t }) {
   const [datePreset, setDatePreset] = useState("all");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
-  const [activeLabel, setActiveLabel] = useState("All tid");
+  const [activeLabel, setActiveLabel] = useState("Totalt");
   const [confirmReset, setConfirmReset] = useState(null); // { cardId, cardName }
   const [confirmStop, setConfirmStop] = useState(null); // { activeMembers, label }
   const [cardInfoMap, setCardInfoMap] = useState({});
