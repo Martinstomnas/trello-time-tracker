@@ -380,7 +380,7 @@ smallBtnRed: {
   alignItems: 'center',
   justifyContent: 'center',
   boxSizing: 'border-box',
-  marginLeft: 2,
+  marginLeft: 1,
 },
   table: { width: '100%', borderCollapse: 'collapse' },
   th: { textAlign: 'left', fontSize: 11, color: '#5E6C84', padding: '4px 6px', borderBottom: '1px solid #DFE1E6' },
