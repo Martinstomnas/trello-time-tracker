@@ -1,6 +1,16 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { getCardTimeData, startTimer, stopTimer, adjustTime } from '../utils/storage.js';
-import { formatTimer, formatDuration, getTotalWithActive, parseDuration } from '../utils/time.js';
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import {
+  getCardTimeData,
+  startTimer,
+  stopTimer,
+  adjustTime,
+} from "../utils/storage.js";
+import {
+  formatTimer,
+  formatDuration,
+  getTotalWithActive,
+  parseDuration,
+} from "../utils/time.js";
 
 /**
  * TimerApp – The popup shown when a user clicks "Tidstracker" on a card.
@@ -8,15 +18,25 @@ import { formatTimer, formatDuration, getTotalWithActive, parseDuration } from '
 export default function TimerApp({ t }) {
   const [timeData, setTimeData] = useState({});
   const [memberId, setMemberId] = useState(null);
-  const [memberName, setMemberName] = useState('');
+  const [memberName, setMemberName] = useState("");
   const [now, setNow] = useState(Date.now());
-  const [manualInput, setManualInput] = useState('');
-  const [manualDate, setManualDate] = useState('');
-  const [manualMember, setManualMember] = useState('self');
+  const [manualInput, setManualInput] = useState("");
+  const [manualDate, setManualDate] = useState("");
+  const [selectedMembers, setSelectedMembers] = useState(["self"]);
   const [boardMembers, setBoardMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const tickRef = useRef(null);
+
+  // Toggle a member in the multi-select
+  const toggleMember = useCallback((id) => {
+    setSelectedMembers((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((m) => m !== id);
+      }
+      return [...prev, id];
+    });
+  }, []);
 
   // Fetch fresh data from Supabase
   const refreshData = useCallback(async () => {
@@ -25,22 +45,22 @@ export default function TimerApp({ t }) {
       setTimeData(data);
       setNow(Date.now());
     } catch (e) {
-      console.error('[TimeTracker] refreshData error:', e);
+      console.error("[TimeTracker] refreshData error:", e);
     }
   }, [t]);
 
   // Load data on mount
   useEffect(() => {
     async function init() {
-      const member = await t.member('id', 'fullName');
+      const member = await t.member("id", "fullName");
       setMemberId(member.id);
       setMemberName(member.fullName);
-      // Fetch board members for the "adjust for others" dropdown
+      // Fetch board members for the multi-select
       try {
-        const board = await t.board('members');
+        const board = await t.board("members");
         setBoardMembers(board.members || []);
       } catch (e) {
-        console.warn('[TimeTracker] Could not fetch board members:', e);
+        console.warn("[TimeTracker] Could not fetch board members:", e);
       }
       await refreshData();
       setLoading(false);
@@ -48,82 +68,144 @@ export default function TimerApp({ t }) {
     init();
   }, [t, refreshData]);
 
-  // Tick every second when a timer is active
+  // Tick every second when any member has an active timer
   useEffect(() => {
-    const myData = memberId ? timeData[memberId] : null;
-    const isRunning = myData?.activeStart != null;
+    const hasActiveTimer = Object.values(timeData).some(
+      (d) => d.activeStart != null,
+    );
 
-    if (isRunning) {
+    if (hasActiveTimer) {
       tickRef.current = setInterval(() => setNow(Date.now()), 1000);
     } else {
       clearInterval(tickRef.current);
     }
     return () => clearInterval(tickRef.current);
-  }, [timeData, memberId]);
+  }, [timeData]);
 
-  // Derived state
+  // Derived state for current user
   const myData = memberId ? timeData[memberId] : null;
-  const isRunning = myData?.activeStart != null;
   const myTotal = myData ? getTotalWithActive(myData) : 0;
-  const displayTotal = isRunning ? (myData.totalMs || 0) + (now - myData.activeStart) : myTotal;
+  const isRunning = myData?.activeStart != null;
+  const displayTotal = isRunning
+    ? (myData.totalMs || 0) + (now - myData.activeStart)
+    : myTotal;
+
+  // Get target members from checkbox selection (returns array of { id, fullName } or undefined for self)
+  const getTargetMembers = useCallback(() => {
+    return selectedMembers
+      .map((id) => {
+        if (id === "self") return undefined; // undefined = current user
+        const m = boardMembers.find((bm) => bm.id === id);
+        return m ? { id: m.id, fullName: m.fullName } : null;
+      })
+      .filter((m) => m !== null);
+  }, [selectedMembers, boardMembers]);
+
+  // Check if ALL selected members have active timers
+  const allSelectedRunning =
+    selectedMembers.length > 0 &&
+    selectedMembers.every((id) => {
+      const mId = id === "self" ? memberId : id;
+      return timeData[mId]?.activeStart != null;
+    });
+
+  // Check if ANY selected member has an active timer
+  const anySelectedRunning = selectedMembers.some((id) => {
+    const mId = id === "self" ? memberId : id;
+    return timeData[mId]?.activeStart != null;
+  });
 
   const handleToggle = useCallback(async () => {
+    if (selectedMembers.length === 0) return;
     setSaving(true);
     try {
-      if (isRunning) {
-        await stopTimer(t);
+      const targets = getTargetMembers();
+      if (allSelectedRunning) {
+        // All are running — stop all selected
+        for (const target of targets) {
+          await stopTimer(t, target);
+        }
       } else {
-        await startTimer(t);
+        // Start those that aren't running yet
+        for (const target of targets) {
+          const mId = target ? target.id : memberId;
+          if (!timeData[mId]?.activeStart) {
+            await startTimer(t, target);
+          }
+        }
       }
       await refreshData();
     } catch (e) {
-      console.error('[TimeTracker] toggle error:', e);
+      console.error("[TimeTracker] toggle error:", e);
     }
     setSaving(false);
-  }, [t, isRunning, refreshData]);
-
-  // Get target member for manual adjustment
-  const getTargetMember = useCallback(() => {
-    if (manualMember === 'self') return undefined;
-    const m = boardMembers.find((bm) => bm.id === manualMember);
-    if (m) return { id: m.id, fullName: m.fullName };
-    return undefined;
-  }, [manualMember, boardMembers]);
+  }, [
+    t,
+    selectedMembers,
+    allSelectedRunning,
+    getTargetMembers,
+    memberId,
+    timeData,
+    refreshData,
+  ]);
 
   const handleManualAdd = useCallback(async () => {
     const ms = parseDuration(manualInput);
-    if (ms > 0) {
+    const targets = getTargetMembers();
+    if (ms > 0 && targets.length > 0) {
       setSaving(true);
-      await adjustTime(t, ms, manualDate || undefined, getTargetMember());
+      for (const target of targets) {
+        await adjustTime(t, ms, manualDate || undefined, target);
+      }
       await refreshData();
-      setManualInput('');
+      setManualInput("");
       setSaving(false);
     }
-  }, [t, manualInput, manualDate, getTargetMember, refreshData]);
+  }, [t, manualInput, manualDate, getTargetMembers, refreshData]);
 
   const handleManualSubtract = useCallback(async () => {
     const ms = parseDuration(manualInput);
-    if (ms > 0) {
+    const targets = getTargetMembers();
+    if (ms > 0 && targets.length > 0) {
       setSaving(true);
-      await adjustTime(t, -ms, manualDate || undefined, getTargetMember());
+      for (const target of targets) {
+        await adjustTime(t, -ms, manualDate || undefined, target);
+      }
       await refreshData();
-      setManualInput('');
+      setManualInput("");
       setSaving(false);
     }
-  }, [t, manualInput, manualDate, getTargetMember, refreshData]);
+  }, [t, manualInput, manualDate, getTargetMembers, refreshData]);
 
   if (loading) {
     return <div style={styles.center}>Laster...</div>;
   }
 
-  const members = Object.entries(timeData).map(([id, d]) => ({
-    id,
-    name: d.name || id,
-    total: getTotalWithActive(d),
-    active: d.activeStart != null,
-  }));
+  const members = Object.entries(timeData)
+    .map(([id, d]) => ({
+      id,
+      name: d.name || id,
+      total: getTotalWithActive(d),
+      active: d.activeStart != null,
+    }))
+    .sort((a, b) => b.total - a.total);
 
   const grandTotal = members.reduce((s, m) => s + m.total, 0);
+
+  // Button label logic
+  const getToggleLabel = () => {
+    if (saving) return "...";
+    if (selectedMembers.length === 0) return "▶ Start";
+    if (allSelectedRunning) return "⏹ Stopp";
+    if (anySelectedRunning) return "▶ Start";
+    return "▶ Start";
+  };
+
+  const getToggleColor = () => {
+    if (saving || selectedMembers.length === 0) return "#A5ADBA";
+    if (allSelectedRunning) return "#EB5A46";
+    return "#61BD4F";
+  };
 
   return (
     <div style={styles.container}>
@@ -133,13 +215,13 @@ export default function TimerApp({ t }) {
 
         <button
           onClick={handleToggle}
-          disabled={saving}
+          disabled={saving || selectedMembers.length === 0}
           style={{
             ...styles.toggleBtn,
-            backgroundColor: saving ? '#A5ADBA' : isRunning ? '#EB5A46' : '#61BD4F',
+            backgroundColor: getToggleColor(),
           }}
         >
-          {saving ? '...' : isRunning ? '⏹ Stopp' : '▶ Start'}
+          {getToggleLabel()}
         </button>
 
         <div style={styles.myTotal}>
@@ -149,7 +231,7 @@ export default function TimerApp({ t }) {
 
       {/* Manual adjustment */}
       <div style={styles.section}>
-        <div style={styles.sectionTitle}>Manuell justering</div>
+        <div style={styles.sectionTitle}>Manuell registrering</div>
         <div style={styles.manualRow}>
           <input
             type="text"
@@ -159,39 +241,64 @@ export default function TimerApp({ t }) {
             style={styles.input}
             disabled={saving}
           />
-          <button onClick={handleManualAdd} style={styles.smallBtn} disabled={saving} title="Legg til tid">
+          <button
+            onClick={handleManualAdd}
+            style={styles.smallBtn}
+            disabled={saving || selectedMembers.length === 0}
+            title="Legg til tid"
+          >
             +
           </button>
-          <button onClick={handleManualSubtract} style={styles.smallBtnRed} disabled={saving} title="Trekk fra tid">
+          <button
+            onClick={handleManualSubtract}
+            style={styles.smallBtnRed}
+            disabled={saving || selectedMembers.length === 0}
+            title="Trekk fra tid"
+          >
             −
           </button>
         </div>
-        <div style={styles.dateRow}>
-          <input
-            type="date"
-            value={manualDate}
-            onChange={(e) => setManualDate(e.target.value)}
-            style={styles.dateInput}
-            disabled={saving}
-          />
-          <span style={styles.dateHint}>{manualDate ? '' : 'Dato (valgfritt – standard er i dag)'}</span>
+        <div style={{ marginTop: 6 }}>
+          <span style={styles.label}>Dato</span>
+          <div style={styles.dateRow}>
+            <input
+              type="date"
+              value={manualDate}
+              onChange={(e) => setManualDate(e.target.value)}
+              style={styles.dateInput}
+              disabled={saving}
+            />
+          </div>
         </div>
         {boardMembers.length > 1 && (
-          <div style={styles.dateRow}>
-            <select
-              value={manualMember}
-              onChange={(e) => setManualMember(e.target.value)}
-              style={styles.memberSelect}
-              disabled={saving}
-            >
-              <option value="self">Meg selv</option>
+          <div style={{ marginTop: 6 }}>
+            <span style={styles.label}>Personer</span>
+            <div style={styles.memberCheckboxList}>
+              <label style={styles.memberCheckbox}>
+                <input
+                  type="checkbox"
+                  checked={selectedMembers.includes("self")}
+                  onChange={() => toggleMember("self")}
+                  disabled={saving}
+                  style={{ margin: 0 }}
+                />
+                <span>Meg selv</span>
+              </label>
               {boardMembers
                 .filter((m) => m.id !== memberId)
                 .map((m) => (
-                  <option key={m.id} value={m.id}>{m.fullName}</option>
+                  <label key={m.id} style={styles.memberCheckbox}>
+                    <input
+                      type="checkbox"
+                      checked={selectedMembers.includes(m.id)}
+                      onChange={() => toggleMember(m.id)}
+                      disabled={saving}
+                      style={{ margin: 0 }}
+                    />
+                    <span>{m.fullName}</span>
+                  </label>
                 ))}
-            </select>
-            <span style={styles.dateHint}>Person</span>
+            </div>
           </div>
         )}
       </div>
@@ -199,42 +306,75 @@ export default function TimerApp({ t }) {
       {/* Per-person breakdown */}
       {members.length > 0 && (
         <div style={styles.section}>
-          <div style={styles.sectionTitle}>Alle på dette kortet</div>
           <table style={styles.table}>
             <thead>
               <tr>
                 <th style={styles.th}>Person</th>
-                <th style={{ ...styles.th, textAlign: 'right' }}>Tid</th>
-                <th style={{ ...styles.th, textAlign: 'center', width: 40 }}>Status</th>
+                <th style={{ ...styles.th, textAlign: "right", width: 120 }}>
+                  Tid
+                </th>
+                <th style={{ ...styles.th, textAlign: "center", width: 40 }}>
+                  Status
+                </th>
               </tr>
             </thead>
             <tbody>
               {members.map((m) => (
                 <tr key={m.id}>
                   <td style={styles.td}>{m.name}</td>
-                  <td style={{ ...styles.td, textAlign: 'right' }}>{formatDuration(m.total)}</td>
-                  <td style={{ ...styles.td, textAlign: 'center' }}>
+                  <td
+                    style={{
+                      ...styles.td,
+                      textAlign: "right",
+                      fontVariantNumeric: "tabular-nums",
+                      fontFamily: "monospace, sans-serif",
+                      whiteSpace: "nowrap",
+                      width: 120,
+                    }}
+                  >
+                    {formatDuration(m.total)}
+                  </td>
+                  <td style={{ ...styles.td, textAlign: "center" }}>
                     <span
                       style={{
-                        display: 'inline-block',
+                        display: "inline-block",
                         width: 10,
                         height: 10,
-                        borderRadius: '50%',
-                        backgroundColor: m.active ? '#EB5A46' : '#61BD4F',
+                        borderRadius: "50%",
+                        backgroundColor: m.active ? "#61BD4F" : "#D3D3D3",
                       }}
-                      title={m.active ? 'Timer kjører' : 'Inaktiv'}
+                      title={m.active ? "Timer kjører" : "Inaktiv"}
                     />
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
-              <tr>
-                <td style={{ ...styles.td, fontWeight: 600 }}>Totalt</td>
-                <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600 }}>
+              <tr style={{ borderBottom: "1px solid #DFE1E6" }}>
+                <td
+                  style={{
+                    ...styles.td,
+                    borderBottom: "none",
+                    fontWeight: 600,
+                  }}
+                >
+                  Totalt
+                </td>
+                <td
+                  style={{
+                    ...styles.td,
+                    borderBottom: "none",
+                    textAlign: "right",
+                    fontWeight: 600,
+                    fontVariantNumeric: "tabular-nums",
+                    fontFamily: "monospace, sans-serif",
+                    whiteSpace: "nowrap",
+                    width: 120,
+                  }}
+                >
                   {formatDuration(grandTotal)}
                 </td>
-                <td />
+                <td style={{ ...styles.td, borderBottom: "none" }} />
               </tr>
             </tfoot>
           </table>
@@ -245,88 +385,107 @@ export default function TimerApp({ t }) {
 }
 
 const styles = {
-  container: { padding: '4px 0', fontSize: 14 },
-  center: { textAlign: 'center', padding: 24 },
-  timerSection: { textAlign: 'center', marginBottom: 16 },
+  container: { padding: "4px 0", fontSize: 14 },
+  center: { textAlign: "center", padding: 24 },
+  timerSection: { textAlign: "center", marginBottom: 16 },
   timerDisplay: {
     fontSize: 36,
     fontWeight: 700,
-    fontFamily: 'monospace',
+    fontFamily: "monospace",
     letterSpacing: 2,
-    margin: '8px 0',
-    color: '#172B4D',
+    margin: "8px 0",
+    color: "#172B4D",
   },
   toggleBtn: {
-    border: 'none',
+    border: "none",
     borderRadius: 6,
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
     fontWeight: 600,
-    padding: '10px 32px',
-    cursor: 'pointer',
+    padding: "10px 32px",
+    cursor: "pointer",
     marginBottom: 8,
   },
-  myTotal: { fontSize: 13, color: '#5E6C84', marginTop: 4 },
-  section: { marginTop: 12, borderTop: '1px solid #DFE1E6', paddingTop: 10 },
-  sectionTitle: { fontSize: 12, fontWeight: 600, color: '#5E6C84', textTransform: 'uppercase', marginBottom: 6 },
-  manualRow: { display: 'flex', gap: 6, alignItems: 'center' },
-  dateRow: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 },
+  myTotal: { fontSize: 13, color: "#5E6C84", marginTop: 4 },
+  section: { marginTop: 12, borderTop: "1px solid #DFE1E6", paddingTop: 10 },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#5E6C84",
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  manualRow: { display: "flex", alignItems: "baseline" },
+  dateRow: { display: "flex", alignItems: "center", gap: 8, marginTop: 6 },
   dateInput: {
-    padding: '5px 8px',
-    border: '1px solid #DFE1E6',
+    padding: "5px 8px",
+    border: "1px solid #DFE1E6",
     borderRadius: 4,
     fontSize: 13,
-    color: '#172B4D',
+    color: "#172B4D",
   },
-  dateHint: { fontSize: 12, color: '#A5ADBA' },
-  memberSelect: {
-    padding: '5px 8px',
-    border: '1px solid #DFE1E6',
-    borderRadius: 4,
-    fontSize: 13,
-    color: '#172B4D',
-    backgroundColor: '#fff',
-    cursor: 'pointer',
-  },
-  input: {
-    flex: 1,
-    padding: '6px 8px',
-    border: '1px solid #DFE1E6',
-    borderRadius: 4,
-    fontSize: 14,
-    outline: 'none',
-  },
+  label: { fontSize: 12, color: "#5E6C84" },
+
   smallBtn: {
-    width: 32,
+    width: 40,
     height: 32,
-    border: 'none',
+    padding: 0,
+    border: "1px solid transparent",
     borderRadius: 4,
-    backgroundColor: '#61BD4F',
-    color: '#fff',
-    fontSize: 18,
+    backgroundColor: "#61BD4F",
+    color: "#fff",
+    fontSize: 14,
     fontWeight: 700,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    lineHeight: 1,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxSizing: "border-box",
+    marginLeft: 6,
   },
+
   smallBtnRed: {
-    width: 32,
+    width: 40,
     height: 32,
-    border: 'none',
+    padding: 0,
+    border: "1px solid transparent",
     borderRadius: 4,
-    backgroundColor: '#EB5A46',
-    color: '#fff',
-    fontSize: 18,
+    backgroundColor: "#EB5A46",
+    color: "#fff",
+    fontSize: 14,
     fontWeight: 700,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    lineHeight: 1,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxSizing: "border-box",
+    marginLeft: 1,
   },
-  table: { width: '100%', borderCollapse: 'collapse' },
-  th: { textAlign: 'left', fontSize: 11, color: '#5E6C84', padding: '4px 6px', borderBottom: '1px solid #DFE1E6' },
-  td: { padding: '5px 6px', fontSize: 13, borderBottom: '1px solid #F4F5F7' },
+  table: { width: "100%", borderCollapse: "collapse" },
+  th: {
+    textAlign: "left",
+    fontSize: 11,
+    color: "#5E6C84",
+    padding: "4px 6px",
+    borderBottom: "1px solid #DFE1E6",
+  },
+  td: { padding: "5px 6px", fontSize: 13, borderBottom: "1px solid #F4F5F7" },
+  memberCheckboxList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 0,
+    marginTop: 4,
+    padding: "0",
+  },
+  memberCheckbox: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 13,
+    color: "#172B4D",
+    cursor: "pointer",
+    margin: 0,
+    padding: "2px 0",
+    minHeight: 24,
+  },
 };

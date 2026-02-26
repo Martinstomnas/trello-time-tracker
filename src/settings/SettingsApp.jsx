@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 
 /**
  * SettingsApp – Power-Up settings panel.
@@ -16,7 +16,7 @@ export default function SettingsApp({ t }) {
   useEffect(() => {
     async function load() {
       try {
-        const settings = await t.get('board', 'shared', 'ttSettings');
+        const settings = await t.get("board", "shared", "ttSettings");
         if (settings) {
           setShowBadge(settings.showBadge !== false);
         }
@@ -29,15 +29,15 @@ export default function SettingsApp({ t }) {
   }, [t]);
 
   const handleSave = async () => {
-    await t.set('board', 'shared', 'ttSettings', { showBadge });
+    await t.set("board", "shared", "ttSettings", { showBadge });
     t.closePopup();
   };
 
   if (!loaded) return <div style={{ padding: 16 }}>Laster...</div>;
 
   return (
-    <div style={{ padding: '4px 0', fontSize: 14 }}>
-      <h3 style={{ margin: '0 0 12px', fontSize: 15, color: '#172B4D' }}>
+    <div style={{ padding: "4px 0", fontSize: 14 }}>
+      <h3 style={{ margin: "0 0 12px", fontSize: 15, color: "#172B4D" }}>
         Tidstracker – Innstillinger
       </h3>
 
@@ -52,8 +52,8 @@ export default function SettingsApp({ t }) {
       </label>
 
       <p style={styles.hint}>
-        Data lagres i Trellos egen lagring (t.set / t.get). Ingen ekstern server brukes.
-        Alle teammedlemmer på boardet kan se sporet tid.
+        Data lagres i Trellos egen lagring (t.set / t.get). Ingen ekstern server
+        brukes. Alle teammedlemmer på boardet kan se sporet tid.
       </p>
 
       <button onClick={handleSave} style={styles.saveBtn}>
@@ -64,17 +64,22 @@ export default function SettingsApp({ t }) {
 }
 
 const styles = {
-  checkLabel: { display: 'flex', alignItems: 'center', marginBottom: 12, cursor: 'pointer' },
-  hint: { fontSize: 12, color: '#5E6C84', lineHeight: 1.5, margin: '12px 0' },
+  checkLabel: {
+    display: "flex",
+    alignItems: "center",
+    marginBottom: 12,
+    cursor: "pointer",
+  },
+  hint: { fontSize: 12, color: "#5E6C84", lineHeight: 1.5, margin: "12px 0" },
   saveBtn: {
-    padding: '8px 20px',
-    border: 'none',
+    padding: "8px 20px",
+    border: "none",
     borderRadius: 4,
-    backgroundColor: '#0079BF',
-    color: '#fff',
+    backgroundColor: "#0079BF",
+    color: "#fff",
     fontSize: 14,
     fontWeight: 600,
-    cursor: 'pointer',
-    width: '100%',
+    cursor: "pointer",
+    width: "100%",
   },
 };

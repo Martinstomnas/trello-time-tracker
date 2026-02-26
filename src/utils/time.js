@@ -9,7 +9,7 @@
  * @returns {string}
  */
 export function formatDuration(ms, short = false) {
-  if (!ms || ms < 0) return short ? '0m' : '0m 0s';
+  if (!ms || ms < 0) return short ? "0m" : "0m 0s";
 
   const totalSeconds = Math.floor(ms / 1000);
   const hours = Math.floor(totalSeconds / 3600);
@@ -26,7 +26,7 @@ export function formatDuration(ms, short = false) {
   if (hours > 0) parts.push(`${hours}t`);
   if (minutes > 0) parts.push(`${minutes}m`);
   if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
-  return parts.join(' ');
+  return parts.join(" ");
 }
 
 /**
@@ -35,11 +35,11 @@ export function formatDuration(ms, short = false) {
  * @returns {string}
  */
 export function formatTimer(ms) {
-  if (!ms || ms < 0) return '00:00:00';
+  if (!ms || ms < 0) return "00:00:00";
   const totalSeconds = Math.floor(ms / 1000);
-  const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
-  const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
-  const s = String(totalSeconds % 60).padStart(2, '0');
+  const h = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+  const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+  const s = String(totalSeconds % 60).padStart(2, "0");
   return `${h}:${m}:${s}`;
 }
 

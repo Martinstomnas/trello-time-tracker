@@ -13,33 +13,41 @@ var BASE = window.location.origin;
 // ── Supabase config ──────────────────────────────────────────────
 // These will be set by the build-time injection script.
 // For local dev, replace these values with your actual Supabase credentials.
-var SUPABASE_URL = '%%VITE_SUPABASE_URL%%';
-var SUPABASE_KEY = '%%VITE_SUPABASE_ANON_KEY%%';
+var SUPABASE_URL = "%%VITE_SUPABASE_URL%%";
+var SUPABASE_KEY = "%%VITE_SUPABASE_ANON_KEY%%";
 
 // ---------------------------------------------------------------------------
 // Supabase REST helpers (no SDK needed)
 // ---------------------------------------------------------------------------
 
 function supabaseGet(table, params) {
-  var url = SUPABASE_URL + '/rest/v1/' + table + '?' + params;
+  var url = SUPABASE_URL + "/rest/v1/" + table + "?" + params;
   return fetch(url, {
     headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY,
-      'Accept': 'application/json',
+      apikey: SUPABASE_KEY,
+      Authorization: "Bearer " + SUPABASE_KEY,
+      Accept: "application/json",
     },
   })
-    .then(function (res) { return res.json(); })
+    .then(function (res) {
+      return res.json();
+    })
     .catch(function (err) {
-      console.error('[TimeTracker] Supabase fetch error:', err);
+      console.error("[TimeTracker] Supabase fetch error:", err);
       return [];
     });
 }
 
 function getCardTimeData(cardId) {
   return Promise.all([
-    supabaseGet('time_entries', 'select=member_id,member_name,duration_ms&card_id=eq.' + cardId),
-    supabaseGet('active_timers', 'select=member_id,member_name,started_at&card_id=eq.' + cardId),
+    supabaseGet(
+      "time_entries",
+      "select=member_id,member_name,duration_ms&card_id=eq." + cardId,
+    ),
+    supabaseGet(
+      "active_timers",
+      "select=member_id,member_name,started_at&card_id=eq." + cardId,
+    ),
   ]).then(function (results) {
     var entries = results[0] || [];
     var actives = results[1] || [];
@@ -48,7 +56,11 @@ function getCardTimeData(cardId) {
     for (var i = 0; i < entries.length; i++) {
       var e = entries[i];
       if (!data[e.member_id]) {
-        data[e.member_id] = { name: e.member_name, totalMs: 0, activeStart: null };
+        data[e.member_id] = {
+          name: e.member_name,
+          totalMs: 0,
+          activeStart: null,
+        };
       }
       data[e.member_id].totalMs += e.duration_ms || 0;
     }
@@ -56,7 +68,11 @@ function getCardTimeData(cardId) {
     for (var j = 0; j < actives.length; j++) {
       var a = actives[j];
       if (!data[a.member_id]) {
-        data[a.member_id] = { name: a.member_name, totalMs: 0, activeStart: null };
+        data[a.member_id] = {
+          name: a.member_name,
+          totalMs: 0,
+          activeStart: null,
+        };
       }
       data[a.member_id].activeStart = new Date(a.started_at).getTime();
     }
@@ -70,22 +86,22 @@ function getCardTimeData(cardId) {
 // ---------------------------------------------------------------------------
 
 function formatDuration(ms, short) {
-  if (!ms || ms < 0) return short ? '0m' : '0m 0s';
+  if (!ms || ms < 0) return short ? "0m" : "0m 0s";
   var totalSeconds = Math.floor(ms / 1000);
   var hours = Math.floor(totalSeconds / 3600);
   var minutes = Math.floor((totalSeconds % 3600) / 60);
   var seconds = totalSeconds % 60;
 
   if (short) {
-    if (hours > 0) return hours + 't ' + minutes + 'm';
-    if (minutes > 0) return minutes + 'm';
-    return seconds + 's';
+    if (hours > 0) return hours + "t " + minutes + "m";
+    if (minutes > 0) return minutes + "m";
+    return seconds + "s";
   }
   var parts = [];
-  if (hours > 0) parts.push(hours + 't');
-  if (minutes > 0) parts.push(minutes + 'm');
-  if (seconds > 0 || parts.length === 0) parts.push(seconds + 's');
-  return parts.join(' ');
+  if (hours > 0) parts.push(hours + "t");
+  if (minutes > 0) parts.push(minutes + "m");
+  if (seconds > 0 || parts.length === 0) parts.push(seconds + "s");
+  return parts.join(" ");
 }
 
 function getTotalWithActive(memberData) {
@@ -118,96 +134,113 @@ function hasActiveTimer(timeData) {
 // Initialize Power-Up
 // ---------------------------------------------------------------------------
 
-console.log('[TimeTracker] Connector loading, BASE =', BASE);
-console.log('[TimeTracker] Supabase URL =', SUPABASE_URL ? 'configured' : 'MISSING');
+console.log("[TimeTracker] Connector loading, BASE =", BASE);
+console.log(
+  "[TimeTracker] Supabase URL =",
+  SUPABASE_URL ? "configured" : "MISSING",
+);
 
 if (!window.TrelloPowerUp) {
-  console.error('[TimeTracker] FATAL: window.TrelloPowerUp not found!');
+  console.error("[TimeTracker] FATAL: window.TrelloPowerUp not found!");
 } else {
   window.TrelloPowerUp.initialize(
     {
-      'card-badges': function (t) {
-        return t.card('id').then(function (card) {
-          return getCardTimeData(card.id).then(function (data) {
-            var total = cardTotalMs(data);
-            var active = hasActiveTimer(data);
-            if (total === 0 && !active) return [];
-            return [{
-              icon: BASE + '/clock-icon.svg',
-              text: formatDuration(total, true),
-              color: active ? 'red' : 'green',
-              refresh: 30,
-            }];
-          });
-        }).catch(function (e) {
-          console.error('[TimeTracker] card-badges error:', e);
-          return [];
-        });
-      },
-
-      'card-detail-badges': function (t) {
-        return t.card('id').then(function (card) {
-          return getCardTimeData(card.id).then(function (data) {
-            var total = cardTotalMs(data);
-            var active = hasActiveTimer(data);
-            if (total === 0 && !active) return [];
-            return [{
-              title: 'Registrert tid',
-              text: formatDuration(total, false),
-              color: active ? 'red' : 'green',
-              callback: function (tc) {
-                return tc.popup({
-                  title: 'Tidstracker',
-                  url: BASE + '/timer.html',
-                  height: 400,
-                });
-              },
-            }];
-          });
-        }).catch(function (e) {
-          console.error('[TimeTracker] card-detail-badges error:', e);
-          return [];
-        });
-      },
-
-      'card-buttons': function (t) {
-        return [{
-          icon: BASE + '/clock-icon.svg',
-          text: 'Tidstracker',
-          callback: function (tc) {
-            return tc.popup({
-              title: 'Tidstracker',
-              url: BASE + '/timer.html',
-              height: 460,
+      "card-badges": function (t) {
+        return t
+          .card("id")
+          .then(function (card) {
+            return getCardTimeData(card.id).then(function (data) {
+              var total = cardTotalMs(data);
+              var active = hasActiveTimer(data);
+              if (total === 0 && !active) return [];
+              return [
+                {
+                  icon: BASE + "/clock-icon.svg",
+                  text: formatDuration(total, true),
+                  color: active ? "green" : "null",
+                  refresh: 30,
+                },
+              ];
             });
-          },
-        }];
+          })
+          .catch(function (e) {
+            console.error("[TimeTracker] card-badges error:", e);
+            return [];
+          });
       },
 
-      'board-buttons': function (t) {
-        return [{
-          icon: BASE + '/clock-icon.svg',
-          text: 'Tidsrapport',
-          callback: function (tc) {
-            return tc.modal({
-              title: 'Tidsrapport',
-              url: BASE + '/report.html',
-              fullscreen: true,
+      "card-detail-badges": function (t) {
+        return t
+          .card("id")
+          .then(function (card) {
+            return getCardTimeData(card.id).then(function (data) {
+              var total = cardTotalMs(data);
+              var active = hasActiveTimer(data);
+              if (total === 0 && !active) return [];
+              return [
+                {
+                  title: "Registrert tid",
+                  text: formatDuration(total, false),
+                  color: active ? "green" : "null",
+                  callback: function (tc) {
+                    return tc.popup({
+                      title: "Tidstracker",
+                      url: BASE + "/timer.html",
+                      height: 400,
+                    });
+                  },
+                },
+              ];
             });
-          },
-        }];
+          })
+          .catch(function (e) {
+            console.error("[TimeTracker] card-detail-badges error:", e);
+            return [];
+          });
       },
 
-      'show-settings': function (t) {
+      "card-buttons": function (t) {
+        return [
+          {
+            icon: BASE + "/clock-icon.svg",
+            text: "Tidstracker",
+            callback: function (tc) {
+              return tc.popup({
+                title: "Tidstracker",
+                url: BASE + "/timer.html",
+                height: 460,
+              });
+            },
+          },
+        ];
+      },
+
+      "board-buttons": function (t) {
+        return [
+          {
+            icon: BASE + "/clock-icon.svg",
+            text: "Tidsrapport",
+            callback: function (tc) {
+              return tc.modal({
+                title: "Tidsrapport",
+                url: BASE + "/report.html",
+                fullscreen: true,
+              });
+            },
+          },
+        ];
+      },
+
+      "show-settings": function (t) {
         return t.popup({
-          title: 'Tidstracker - Innstillinger',
-          url: BASE + '/settings.html',
+          title: "Tidstracker - Innstillinger",
+          url: BASE + "/settings.html",
           height: 300,
         });
       },
     },
-    { appKey: '', appName: 'Time Tracker' }
+    { appKey: "", appName: "Time Tracker" },
   );
 
-  console.log('[TimeTracker] Initialization complete!');
+  console.log("[TimeTracker] Initialization complete!");
 }
