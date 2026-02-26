@@ -178,10 +178,10 @@ export default function TimerApp({ t }) {
             style={styles.input}
             disabled={saving}
           />
-          <button onClick={handleManualAdd} style={styles.smallBtn} disabled={saving} title="Legg til tid">
+          <button onClick={handleManualAdd} style={styles.smallBtn} disabled={saving || selectedMembers.length === 0} title="Legg til tid">
             +
           </button>
-          <button onClick={handleManualSubtract} style={styles.smallBtnRed} disabled={saving} title="Trekk fra tid">
+          <button onClick={handleManualSubtract} style={styles.smallBtnRed} disabled={saving || selectedMembers.length === 0} title="Trekk fra tid">
             −
           </button>
         </div>
