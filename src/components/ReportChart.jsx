@@ -40,6 +40,23 @@ const PALETTE = [
   "#29CCE5",
 ];
 
+function trelloLabelColor(color) {
+  const map = {
+    green: "#61BD4F",
+    yellow: "#F2D600",
+    orange: "#FF9F1A",
+    red: "#EB5A46",
+    purple: "#C377E0",
+    blue: "#0079BF",
+    sky: "#00C2E0",
+    lime: "#51E898",
+    pink: "#FF78CB",
+    black: "#344563",
+    gray: "#B3BAC5",
+  };
+  return map[color] || "#B3BAC5";
+}
+
 /**
  * ReportChart – Renders either a bar or pie chart for aggregated time data.
  *
@@ -49,7 +66,9 @@ export default function ReportChart({ data, chartType }) {
   const chartData = useMemo(() => {
     const labels = data.map((d) => d.label);
     const values = data.map((d) => Math.round(d.totalMs / 60000)); // convert to minutes
-    const colors = data.map((_, i) => PALETTE[i % PALETTE.length]);
+    const colors = data.map((d, i) =>
+      d.color ? trelloLabelColor(d.color) : PALETTE[i % PALETTE.length],
+    );
 
     return {
       labels,
