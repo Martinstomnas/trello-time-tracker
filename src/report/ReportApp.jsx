@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { getBoardTimeReport, resetCardTimeById } from '../utils/storage.js';
+import { getBoardTimeReport, resetCardTimeById, stopActiveTimersByIds } from '../utils/storage.js';
 import { formatDuration, getTotalWithActive } from '../utils/time.js';
 import { downloadCSV, downloadJSON } from '../utils/export.js';
 import ReportChart from '../components/ReportChart.jsx';
@@ -90,6 +90,8 @@ export default function ReportApp({ t }) {
   const [customTo, setCustomTo] = useState('');
   const [activeLabel, setActiveLabel] = useState('All tid');
   const [confirmReset, setConfirmReset] = useState(null); // { cardId, cardName }
+  const [confirmStop, setConfirmStop] = useState(null); // { activeMembers, label }
+  const [cardInfoMap, setCardInfoMap] = useState({});
 
   // Build filters from state
   const getFilters = useCallback(() => {
@@ -109,8 +111,9 @@ export default function ReportApp({ t }) {
     setError(null);
     try {
       const filters = getFilters();
-      const data = await getBoardTimeReport(t, filters);
-      setReportData(data);
+      const result = await getBoardTimeReport(t, filters);
+      setReportData(result.cards);
+      setCardInfoMap(result.cardInfoMap);
     } catch (err) {
       console.error('Report load error:', err);
       setError('Kunne ikke laste tidsdata. Prøv igjen.');
@@ -144,22 +147,33 @@ export default function ReportApp({ t }) {
         const ms = getTotalWithActive(mData);
         if (ms === 0) continue;
 
+        const activeMember = mData.activeTimerId ? {
+          timerId: mData.activeTimerId,
+          memberId,
+          memberName: mData.name || memberId,
+          cardId: card.cardId,
+          cardName: card.cardName,
+        } : null;
+
         if (groupBy === 'card') {
           const key = card.cardId;
-          const existing = map.get(key) || { cardId: card.cardId, label: card.cardName, totalMs: 0, sublabel: card.listName };
+          const existing = map.get(key) || { cardId: card.cardId, label: card.cardName, totalMs: 0, sublabel: card.listName, activeMembers: [] };
           existing.totalMs += ms;
+          if (activeMember) existing.activeMembers.push(activeMember);
           map.set(key, existing);
         } else if (groupBy === 'person') {
           const key = memberId;
-          const existing = map.get(key) || { label: mData.name || memberId, totalMs: 0 };
+          const existing = map.get(key) || { label: mData.name || memberId, totalMs: 0, activeMembers: [] };
           existing.totalMs += ms;
+          if (activeMember) existing.activeMembers.push(activeMember);
           map.set(key, existing);
         } else if (groupBy === 'label') {
           const labels = card.labels.length > 0 ? card.labels : [{ name: 'Uten label', color: 'gray' }];
           for (const lbl of labels) {
             const key = lbl.name || lbl.color;
-            const existing = map.get(key) || { label: key, totalMs: 0, color: lbl.color };
+            const existing = map.get(key) || { label: key, totalMs: 0, color: lbl.color, activeMembers: [] };
             existing.totalMs += ms;
+            if (activeMember) existing.activeMembers.push(activeMember);
             map.set(key, existing);
           }
         }
@@ -182,6 +196,13 @@ export default function ReportApp({ t }) {
     setConfirmReset(null);
     await loadData();
   }, [loadData]);
+
+  const handleStop = useCallback(async (activeMembers) => {
+    const timerIds = activeMembers.map((m) => m.timerId);
+    await stopActiveTimersByIds(timerIds, cardInfoMap);
+    setConfirmStop(null);
+    await loadData();
+  }, [loadData, cardInfoMap]);
 
   if (loading) {
     return <div style={styles.center}>Laster rapport...</div>;
@@ -345,13 +366,23 @@ export default function ReportApp({ t }) {
                 </td>
                 {groupBy === 'card' && <td style={styles.tdSub}>{row.sublabel || ''}</td>}
                 <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600 }}>
-                  {formatDuration(row.totalMs)}
+                  {row.activeMembers?.length > 0 ? (
+                    <span
+                      onClick={() => setConfirmStop({ activeMembers: row.activeMembers, label: row.label })}
+                      style={styles.activeTimeText}
+                      title="Klikk for å stoppe aktiv tracking"
+                    >
+                      {formatDuration(row.totalMs)}
+                    </span>
+                  ) : (
+                    formatDuration(row.totalMs)
+                  )}
                 </td>
                 <td style={{ ...styles.td, textAlign: 'right', color: '#5E6C84' }}>
                   {grandTotal > 0 ? ((row.totalMs / grandTotal) * 100).toFixed(1) + '%' : '—'}
                 </td>
                 {groupBy === 'card' && (
-                  <td style={{ ...styles.td, textAlign: 'center', padding: '4px 6px', verticalAlign: 'middle' }}>
+                  <td style={{ ...styles.td, textAlign: 'center', padding: '4px 6px', verticalAlign: 'middle', lineHeight: 1 }}>
                     <button
                       onClick={() => setConfirmReset({ cardId: row.cardId, cardName: row.label })}
                       style={styles.resetBtn}
@@ -380,7 +411,7 @@ export default function ReportApp({ t }) {
           <ReportChart data={aggregated} chartType={chartType} />
         </div>
       )}
-      {/* Confirmation dialog */}
+      {/* Reset confirmation dialog */}
       {confirmReset && (
         <div style={styles.overlay}>
           <div style={styles.dialog}>
@@ -399,6 +430,42 @@ export default function ReportApp({ t }) {
                 style={styles.dialogConfirm}
               >
                 Tilbakestill
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stop timer confirmation dialog */}
+      {confirmStop && (
+        <div style={styles.overlay}>
+          <div style={styles.dialog}>
+            <p style={styles.dialogText}>
+              Stopp aktiv tidstracking for <strong>{confirmStop.label}</strong>?
+            </p>
+            <div style={styles.activeList}>
+              {confirmStop.activeMembers.map((m, i) => (
+                <div key={i} style={styles.activeListItem}>
+                  <span style={styles.activeDot} />
+                  <span>{m.memberName}</span>
+                  {groupBy !== 'card' && (
+                    <span style={styles.activeCardName}> – {m.cardName}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div style={styles.dialogButtons}>
+              <button
+                onClick={() => setConfirmStop(null)}
+                style={styles.dialogCancel}
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={() => handleStop(confirmStop.activeMembers)}
+                style={styles.dialogStopBtn}
+              >
+                Stopp tid
               </button>
             </div>
           </div>
@@ -489,7 +556,6 @@ const styles = {
   tdSub: { padding: '8px 10px', fontSize: 13, borderBottom: '1px solid #F4F5F7', color: '#5E6C84' },
   chartContainer: { padding: '16px 0', maxHeight: 420 },
 
-  // Reset button
   resetBtn: {
     padding: '2px 8px', border: '1px solid #DFE1E6', borderRadius: 4,
     backgroundColor: '#fff', cursor: 'pointer', fontSize: 12, color: '#5E6C84',
@@ -515,5 +581,28 @@ const styles = {
   dialogConfirm: {
     padding: '8px 16px', border: 'none', borderRadius: 4,
     backgroundColor: '#EB5A46', cursor: 'pointer', fontSize: 14, color: '#fff', fontWeight: 600,
+  },
+  dialogStopBtn: {
+    padding: '8px 16px', border: 'none', borderRadius: 4,
+    backgroundColor: '#EB5A46', cursor: 'pointer', fontSize: 14, color: '#fff', fontWeight: 600,
+  },
+
+  // Active time
+  activeTimeText: {
+    color: '#EB5A46', cursor: 'pointer', textDecoration: 'none',
+    borderBottom: '1px dashed #EB5A46', paddingBottom: 1,
+  },
+  activeList: {
+    margin: '12px 0', padding: '8px 12px', backgroundColor: '#FAFBFC',
+    borderRadius: 4, border: '1px solid #DFE1E6',
+  },
+  activeListItem: {
+    display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 14,
+  },
+  activeDot: {
+    width: 8, height: 8, borderRadius: '50%', backgroundColor: '#EB5A46', flexShrink: 0,
+  },
+  activeCardName: {
+    color: '#5E6C84', fontSize: 13,
   },
 };

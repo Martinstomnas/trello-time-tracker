@@ -259,10 +259,10 @@ export async function getBoardTimeReport(t, filters = {}) {
   const { data: entries, error } = await query;
   if (error) throw error;
 
-  // Also get active timers
+  // Also get active timers (include id for stopping)
   const { data: actives } = await supabase
     .from('active_timers')
-    .select('card_id, member_id, member_name, started_at')
+    .select('id, card_id, member_id, member_name, started_at')
     .eq('board_id', board.id);
 
   // Group by card
@@ -282,7 +282,7 @@ export async function getBoardTimeReport(t, filters = {}) {
     }
     const card = cardMap.get(entry.card_id);
     if (!card.timeData[entry.member_id]) {
-      card.timeData[entry.member_id] = { name: entry.member_name, totalMs: 0, activeStart: null };
+      card.timeData[entry.member_id] = { name: entry.member_name, totalMs: 0, activeStart: null, activeTimerId: null };
     }
     card.timeData[entry.member_id].totalMs += entry.duration_ms || 0;
   }
@@ -300,12 +300,13 @@ export async function getBoardTimeReport(t, filters = {}) {
     }
     const card = cardMap.get(active.card_id);
     if (!card.timeData[active.member_id]) {
-      card.timeData[active.member_id] = { name: active.member_name, totalMs: 0, activeStart: null };
+      card.timeData[active.member_id] = { name: active.member_name, totalMs: 0, activeStart: null, activeTimerId: null };
     }
     card.timeData[active.member_id].activeStart = new Date(active.started_at).getTime();
+    card.timeData[active.member_id].activeTimerId = active.id;
   }
 
-  return Array.from(cardMap.values());
+  return { cards: Array.from(cardMap.values()), cardInfoMap };
 }
 
 /**
@@ -327,4 +328,56 @@ export async function resetCardTimeById(cardId) {
   const { error: e2 } = await supabase.from('active_timers').delete().eq('card_id', cardId);
   if (e1) console.error('[TimeTracker] resetCardTimeById entries error:', e1);
   if (e2) console.error('[TimeTracker] resetCardTimeById timers error:', e2);
+}
+
+/**
+ * Stop active timers by their IDs.
+ * Converts each active timer into a completed time_entry, then deletes it.
+ * @param {string[]} timerIds – IDs from the active_timers table
+ * @param {object} [cardInfoMap] – Optional map of card_id -> { name, listName, labels }
+ */
+export async function stopActiveTimersByIds(timerIds, cardInfoMap = {}) {
+  if (!timerIds.length) return;
+
+  // Fetch the active timers
+  const { data: actives, error: fetchErr } = await supabase
+    .from('active_timers')
+    .select('*')
+    .in('id', timerIds);
+
+  if (fetchErr || !actives?.length) {
+    console.error('[TimeTracker] stopActiveTimersByIds fetch error:', fetchErr);
+    return;
+  }
+
+  const endedAt = new Date();
+  const entries = actives.map((a) => {
+    const startedAt = new Date(a.started_at);
+    const info = cardInfoMap[a.card_id] || {};
+    return {
+      board_id: a.board_id,
+      card_id: a.card_id,
+      card_name: info.name || a.card_id,
+      list_name: info.listName || '',
+      member_id: a.member_id,
+      member_name: a.member_name,
+      started_at: a.started_at,
+      ended_at: endedAt.toISOString(),
+      duration_ms: endedAt.getTime() - startedAt.getTime(),
+      labels: info.labels || [],
+    };
+  });
+
+  const { error: insertErr } = await supabase.from('time_entries').insert(entries);
+  if (insertErr) {
+    console.error('[TimeTracker] stopActiveTimersByIds insert error:', insertErr);
+    return;
+  }
+
+  const { error: deleteErr } = await supabase
+    .from('active_timers')
+    .delete()
+    .in('id', timerIds);
+
+  if (deleteErr) console.error('[TimeTracker] stopActiveTimersByIds delete error:', deleteErr);
 }
