@@ -451,7 +451,16 @@ export default function ReportApp({ t }) {
               </th>
               {groupBy === "card" && <th style={styles.th}>Liste</th>}
               {groupBy === "person" && <th style={styles.th}>Aktive kort</th>}
-              <th style={{ ...styles.th, textAlign: "right" }}>Tid</th>
+              <th
+                style={{
+                  ...styles.th,
+                  textAlign: "right",
+                  width: 110,
+                  minWidth: 110,
+                }}
+              >
+                Tid
+              </th>
               <th style={{ ...styles.th, textAlign: "right", width: 80 }}>
                 Andel
               </th>
@@ -495,7 +504,14 @@ export default function ReportApp({ t }) {
                   </td>
                 )}
                 <td
-                  style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}
+                  style={{
+                    ...styles.td,
+                    textAlign: "right",
+                    fontWeight: 600,
+                    width: 110,
+                    minWidth: 110,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
                 >
                   {row.activeMembers?.length > 0 ? (
                     <span
@@ -554,7 +570,18 @@ export default function ReportApp({ t }) {
                 borderBottom: "2px solid #DFE1E6",
               }}
             >
-              <td style={{ ...styles.td, fontWeight: 700 }}>Totalt</td>
+              <td
+                style={{
+                  ...styles.td,
+                  textAlign: "right",
+                  fontWeight: 700,
+                  width: 110,
+                  minWidth: 110,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {formatDuration(grandTotal)}
+              </td>
               {groupBy === "card" && <td />}
               {groupBy === "person" && <td style={styles.td} />}
               <td style={{ ...styles.td, textAlign: "right", fontWeight: 700 }}>
