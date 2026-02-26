@@ -22,8 +22,8 @@ import { supabase } from './supabase.js';
 /**
  * Start a timer for the current member on a card.
  */
-export async function startTimer(t) {
-  const member = await t.member('id', 'fullName');
+export async function startTimer(t, targetMember) {
+  const member = targetMember || await t.member('id', 'fullName');
   const card = await t.card('id', 'name');
   const board = await t.board('id');
 
@@ -52,8 +52,8 @@ export async function startTimer(t) {
  * Stop the timer for the current member on a card.
  * Moves the active timer into a completed time_entry.
  */
-export async function stopTimer(t) {
-  const member = await t.member('id', 'fullName');
+export async function stopTimer(t, targetMember) {
+  const member = targetMember || await t.member('id', 'fullName');
   const card = await t.card('id', 'name');
   const board = await t.board('id');
   const list = await t.list('id', 'name');

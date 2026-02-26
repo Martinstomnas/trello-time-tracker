@@ -45,7 +45,7 @@ export default function TimerApp({ t }) {
       const member = await t.member('id', 'fullName');
       setMemberId(member.id);
       setMemberName(member.fullName);
-      // Fetch board members for the "adjust for others" dropdown
+      // Fetch board members for the multi-select
       try {
         const board = await t.board('members');
         setBoardMembers(board.members || []);
@@ -58,41 +58,25 @@ export default function TimerApp({ t }) {
     init();
   }, [t, refreshData]);
 
-  // Tick every second when a timer is active
+  // Tick every second when any member has an active timer
   useEffect(() => {
-    const myData = memberId ? timeData[memberId] : null;
-    const isRunning = myData?.activeStart != null;
+    const hasActiveTimer = Object.values(timeData).some((d) => d.activeStart != null);
 
-    if (isRunning) {
+    if (hasActiveTimer) {
       tickRef.current = setInterval(() => setNow(Date.now()), 1000);
     } else {
       clearInterval(tickRef.current);
     }
     return () => clearInterval(tickRef.current);
-  }, [timeData, memberId]);
+  }, [timeData]);
 
-  // Derived state
+  // Derived state for current user
   const myData = memberId ? timeData[memberId] : null;
-  const isRunning = myData?.activeStart != null;
   const myTotal = myData ? getTotalWithActive(myData) : 0;
+  const isRunning = myData?.activeStart != null;
   const displayTotal = isRunning ? (myData.totalMs || 0) + (now - myData.activeStart) : myTotal;
 
-  const handleToggle = useCallback(async () => {
-    setSaving(true);
-    try {
-      if (isRunning) {
-        await stopTimer(t);
-      } else {
-        await startTimer(t);
-      }
-      await refreshData();
-    } catch (e) {
-      console.error('[TimeTracker] toggle error:', e);
-    }
-    setSaving(false);
-  }, [t, isRunning, refreshData]);
-
-  // Get target members for manual adjustment (returns array)
+  // Get target members from checkbox selection (returns array of { id, fullName } or undefined for self)
   const getTargetMembers = useCallback(() => {
     return selectedMembers.map((id) => {
       if (id === 'self') return undefined; // undefined = current user
@@ -101,12 +85,49 @@ export default function TimerApp({ t }) {
     }).filter((m) => m !== null);
   }, [selectedMembers, boardMembers]);
 
+  // Check if ALL selected members have active timers
+  const allSelectedRunning = selectedMembers.length > 0 && selectedMembers.every((id) => {
+    const mId = id === 'self' ? memberId : id;
+    return timeData[mId]?.activeStart != null;
+  });
+
+  // Check if ANY selected member has an active timer
+  const anySelectedRunning = selectedMembers.some((id) => {
+    const mId = id === 'self' ? memberId : id;
+    return timeData[mId]?.activeStart != null;
+  });
+
+  const handleToggle = useCallback(async () => {
+    if (selectedMembers.length === 0) return;
+    setSaving(true);
+    try {
+      const targets = getTargetMembers();
+      if (allSelectedRunning) {
+        // All are running — stop all selected
+        for (const target of targets) {
+          await stopTimer(t, target);
+        }
+      } else {
+        // Start those that aren't running yet
+        for (const target of targets) {
+          const mId = target ? target.id : memberId;
+          if (!timeData[mId]?.activeStart) {
+            await startTimer(t, target);
+          }
+        }
+      }
+      await refreshData();
+    } catch (e) {
+      console.error('[TimeTracker] toggle error:', e);
+    }
+    setSaving(false);
+  }, [t, selectedMembers, allSelectedRunning, getTargetMembers, memberId, timeData, refreshData]);
+
   const handleManualAdd = useCallback(async () => {
     const ms = parseDuration(manualInput);
     const targets = getTargetMembers();
     if (ms > 0 && targets.length > 0) {
       setSaving(true);
-      const targets = getTargetMembers();
       for (const target of targets) {
         await adjustTime(t, ms, manualDate || undefined, target);
       }
@@ -121,7 +142,6 @@ export default function TimerApp({ t }) {
     const targets = getTargetMembers();
     if (ms > 0 && targets.length > 0) {
       setSaving(true);
-      const targets = getTargetMembers();
       for (const target of targets) {
         await adjustTime(t, -ms, manualDate || undefined, target);
       }
@@ -144,6 +164,21 @@ export default function TimerApp({ t }) {
 
   const grandTotal = members.reduce((s, m) => s + m.total, 0);
 
+  // Button label logic
+  const getToggleLabel = () => {
+    if (saving) return '...';
+    if (selectedMembers.length === 0) return '▶ Start';
+    if (allSelectedRunning) return '⏹ Stopp';
+    if (anySelectedRunning) return '▶ Start resten';
+    return '▶ Start';
+  };
+
+  const getToggleColor = () => {
+    if (saving || selectedMembers.length === 0) return '#A5ADBA';
+    if (allSelectedRunning) return '#EB5A46';
+    return '#61BD4F';
+  };
+
   return (
     <div style={styles.container}>
       {/* Timer display */}
@@ -152,13 +187,13 @@ export default function TimerApp({ t }) {
 
         <button
           onClick={handleToggle}
-          disabled={saving}
+          disabled={saving || selectedMembers.length === 0}
           style={{
             ...styles.toggleBtn,
-            backgroundColor: saving ? '#A5ADBA' : isRunning ? '#EB5A46' : '#61BD4F',
+            backgroundColor: getToggleColor(),
           }}
         >
-          {saving ? '...' : isRunning ? '⏹ Stopp' : '▶ Start'}
+          {getToggleLabel()}
         </button>
 
         <div style={styles.myTotal}>
@@ -309,15 +344,6 @@ const styles = {
     color: '#172B4D',
   },
   dateHint: { fontSize: 12, color: '#A5ADBA' },
-  memberSelect: {
-    padding: '5px 8px',
-    border: '1px solid #DFE1E6',
-    borderRadius: 4,
-    fontSize: 13,
-    color: '#172B4D',
-    backgroundColor: '#fff',
-    cursor: 'pointer',
-  },
   input: {
     flex: 1,
     padding: '6px 8px',
