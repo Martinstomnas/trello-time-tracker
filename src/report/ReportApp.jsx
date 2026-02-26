@@ -301,7 +301,10 @@ export default function ReportApp({ t }) {
       <div style={styles.header}>
         <h2 style={styles.title}>Tidsrapport</h2>
         <div style={styles.totalBadge}>
-          {activeLabel}: <strong>{formatDuration(grandTotal)}</strong>
+          {activeLabel}:{" "}
+          <strong style={styles.totalBadgeTime}>
+            {formatDuration(grandTotal)}
+          </strong>
         </div>
       </div>
 
@@ -453,15 +456,7 @@ export default function ReportApp({ t }) {
               </th>
               {groupBy === "card" && <th style={styles.th}>Liste</th>}
               {groupBy === "person" && <th style={styles.th}>Aktive kort</th>}
-              <th
-                style={{
-                  ...styles.th,
-                  textAlign: "right",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Tid
-              </th>
+              <th style={styles.thTime}>Tid</th>
               <th
                 style={{
                   ...styles.th,
@@ -514,15 +509,7 @@ export default function ReportApp({ t }) {
                       : "—"}
                   </td>
                 )}
-                <td
-                  style={{
-                    ...styles.td,
-                    textAlign: "right",
-                    fontWeight: 600,
-                    whiteSpace: "nowrap",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
+                <td style={styles.tdTime}>
                   {row.activeMembers?.length > 0 ? (
                     <span
                       onClick={() =>
@@ -589,15 +576,7 @@ export default function ReportApp({ t }) {
               <td style={{ ...styles.td, fontWeight: 700 }}>Totalt</td>
               {groupBy === "card" && <td />}
               {groupBy === "person" && <td style={styles.td} />}
-              <td
-                style={{
-                  ...styles.td,
-                  textAlign: "right",
-                  fontWeight: 700,
-                  whiteSpace: "nowrap",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
+              <td style={{ ...styles.tdTime, fontWeight: 700 }}>
                 {formatDuration(grandTotal)}
               </td>
               <td style={{ ...styles.td, textAlign: "right" }}>100%</td>
@@ -716,6 +695,10 @@ const styles = {
     borderRadius: 6,
     fontSize: 15,
   },
+  totalBadgeTime: {
+    fontVariantNumeric: "tabular-nums",
+    fontFamily: "monospace, sans-serif",
+  },
 
   // Date filter bar
   dateBar: {
@@ -772,7 +755,7 @@ const styles = {
     display: "flex",
     flexWrap: "wrap",
     gap: 12,
-    alignItems: "flex-end", // Ensures labels align at top because inputs align at bottom
+    alignItems: "flex-end",
     marginBottom: 16,
     paddingBottom: 12,
     borderBottom: "1px solid #DFE1E6",
@@ -793,18 +776,18 @@ const styles = {
     cursor: "pointer",
     height: 34,
     boxSizing: "border-box",
-    verticalAlign: "middle", // Ensures consistent vertical alignment
+    verticalAlign: "middle",
   },
   toggleGroup: { display: "flex", gap: 0, height: 50 },
   toggle: {
-    padding: "0 14px", // Reset vertical padding, use flex centering
+    padding: "0 14px",
     border: "1px solid #DFE1E6",
     backgroundColor: "#fff",
     cursor: "pointer",
     fontSize: 13,
     height: 34,
     boxSizing: "border-box",
-    display: "inline-flex", // Center content precisely
+    display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     verticalAlign: "middle",
@@ -819,7 +802,7 @@ const styles = {
     fontWeight: 600,
     height: 34,
     boxSizing: "border-box",
-    display: "inline-flex", // Center content precisely
+    display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     verticalAlign: "middle",
@@ -850,12 +833,37 @@ const styles = {
     borderBottom: "2px solid #DFE1E6",
     backgroundColor: "#fff",
   },
+  thTime: {
+    textAlign: "right",
+    fontSize: 11,
+    fontWeight: 600,
+    color: "#5E6C84",
+    textTransform: "uppercase",
+    padding: "8px 10px",
+    borderBottom: "2px solid #DFE1E6",
+    backgroundColor: "#fff",
+    whiteSpace: "nowrap",
+    width: 140,
+  },
   td: {
     padding: "8px 10px",
     fontSize: 14,
     borderBottom: "1px solid #F4F5F7",
     color: "#172B4D",
     backgroundColor: "inherit",
+  },
+  tdTime: {
+    padding: "8px 10px",
+    fontSize: 14,
+    borderBottom: "1px solid #F4F5F7",
+    color: "#172B4D",
+    backgroundColor: "inherit",
+    textAlign: "right",
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+    fontVariantNumeric: "tabular-nums",
+    fontFamily: "monospace, sans-serif",
+    width: 140,
   },
   tdSub: {
     padding: "8px 10px",
