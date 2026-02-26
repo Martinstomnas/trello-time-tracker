@@ -22,7 +22,6 @@ export default function TimerApp({ t }) {
   const toggleMember = useCallback((id) => {
     setSelectedMembers((prev) => {
       if (prev.includes(id)) {
-        if (prev.length === 1) return prev; // Must keep at least one selected
         return prev.filter((m) => m !== id);
       }
       return [...prev, id];
@@ -104,7 +103,8 @@ export default function TimerApp({ t }) {
 
   const handleManualAdd = useCallback(async () => {
     const ms = parseDuration(manualInput);
-    if (ms > 0) {
+    const targets = getTargetMembers();
+    if (ms > 0 && targets.length > 0) {
       setSaving(true);
       const targets = getTargetMembers();
       for (const target of targets) {
@@ -118,7 +118,8 @@ export default function TimerApp({ t }) {
 
   const handleManualSubtract = useCallback(async () => {
     const ms = parseDuration(manualInput);
-    if (ms > 0) {
+    const targets = getTargetMembers();
+    if (ms > 0 && targets.length > 0) {
       setSaving(true);
       const targets = getTargetMembers();
       for (const target of targets) {
