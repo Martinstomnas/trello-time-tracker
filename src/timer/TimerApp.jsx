@@ -181,12 +181,14 @@ export default function TimerApp({ t }) {
     return <div style={styles.center}>Laster...</div>;
   }
 
-  const members = Object.entries(timeData).map(([id, d]) => ({
-    id,
-    name: d.name || id,
-    total: getTotalWithActive(d),
-    active: d.activeStart != null,
-  }));
+  const members = Object.entries(timeData)
+    .map(([id, d]) => ({
+      id,
+      name: d.name || id,
+      total: getTotalWithActive(d),
+      active: d.activeStart != null,
+    }))
+    .sort((a, b) => b.total - a.total);
 
   const grandTotal = members.reduce((s, m) => s + m.total, 0);
 
