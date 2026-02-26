@@ -12,11 +12,22 @@ export default function TimerApp({ t }) {
   const [now, setNow] = useState(Date.now());
   const [manualInput, setManualInput] = useState('');
   const [manualDate, setManualDate] = useState('');
-  const [manualMember, setManualMember] = useState('self');
+  const [selectedMembers, setSelectedMembers] = useState(['self']);
   const [boardMembers, setBoardMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const tickRef = useRef(null);
+
+  // Toggle a member in the multi-select
+  const toggleMember = useCallback((id) => {
+    setSelectedMembers((prev) => {
+      if (prev.includes(id)) {
+        if (prev.length === 1) return prev; // Must keep at least one selected
+        return prev.filter((m) => m !== id);
+      }
+      return [...prev, id];
+    });
+  }, []);
 
   // Fetch fresh data from Supabase
   const refreshData = useCallback(async () => {
@@ -82,35 +93,42 @@ export default function TimerApp({ t }) {
     setSaving(false);
   }, [t, isRunning, refreshData]);
 
-  // Get target member for manual adjustment
-  const getTargetMember = useCallback(() => {
-    if (manualMember === 'self') return undefined;
-    const m = boardMembers.find((bm) => bm.id === manualMember);
-    if (m) return { id: m.id, fullName: m.fullName };
-    return undefined;
-  }, [manualMember, boardMembers]);
+  // Get target members for manual adjustment (returns array)
+  const getTargetMembers = useCallback(() => {
+    return selectedMembers.map((id) => {
+      if (id === 'self') return undefined; // undefined = current user
+      const m = boardMembers.find((bm) => bm.id === id);
+      return m ? { id: m.id, fullName: m.fullName } : null;
+    }).filter((m) => m !== null);
+  }, [selectedMembers, boardMembers]);
 
   const handleManualAdd = useCallback(async () => {
     const ms = parseDuration(manualInput);
     if (ms > 0) {
       setSaving(true);
-      await adjustTime(t, ms, manualDate || undefined, getTargetMember());
+      const targets = getTargetMembers();
+      for (const target of targets) {
+        await adjustTime(t, ms, manualDate || undefined, target);
+      }
       await refreshData();
       setManualInput('');
       setSaving(false);
     }
-  }, [t, manualInput, manualDate, getTargetMember, refreshData]);
+  }, [t, manualInput, manualDate, getTargetMembers, refreshData]);
 
   const handleManualSubtract = useCallback(async () => {
     const ms = parseDuration(manualInput);
     if (ms > 0) {
       setSaving(true);
-      await adjustTime(t, -ms, manualDate || undefined, getTargetMember());
+      const targets = getTargetMembers();
+      for (const target of targets) {
+        await adjustTime(t, -ms, manualDate || undefined, target);
+      }
       await refreshData();
       setManualInput('');
       setSaving(false);
     }
-  }, [t, manualInput, manualDate, getTargetMember, refreshData]);
+  }, [t, manualInput, manualDate, getTargetMembers, refreshData]);
 
   if (loading) {
     return <div style={styles.center}>Laster...</div>;
@@ -177,21 +195,32 @@ export default function TimerApp({ t }) {
           <span style={styles.dateHint}>{manualDate ? '' : 'Dato (valgfritt – standard er i dag)'}</span>
         </div>
         {boardMembers.length > 1 && (
-          <div style={styles.dateRow}>
-            <select
-              value={manualMember}
-              onChange={(e) => setManualMember(e.target.value)}
-              style={styles.memberSelect}
-              disabled={saving}
-            >
-              <option value="self">Meg selv</option>
+          <div style={{ marginTop: 6 }}>
+            <span style={styles.dateHint}>Personer</span>
+            <div style={styles.memberCheckboxList}>
+              <label style={styles.memberCheckbox}>
+                <input
+                  type="checkbox"
+                  checked={selectedMembers.includes('self')}
+                  onChange={() => toggleMember('self')}
+                  disabled={saving}
+                />
+                <span>Meg selv</span>
+              </label>
               {boardMembers
                 .filter((m) => m.id !== memberId)
                 .map((m) => (
-                  <option key={m.id} value={m.id}>{m.fullName}</option>
+                  <label key={m.id} style={styles.memberCheckbox}>
+                    <input
+                      type="checkbox"
+                      checked={selectedMembers.includes(m.id)}
+                      onChange={() => toggleMember(m.id)}
+                      disabled={saving}
+                    />
+                    <span>{m.fullName}</span>
+                  </label>
                 ))}
-            </select>
-            <span style={styles.dateHint}>Person</span>
+            </div>
           </div>
         )}
       </div>
@@ -329,4 +358,19 @@ const styles = {
   table: { width: '100%', borderCollapse: 'collapse' },
   th: { textAlign: 'left', fontSize: 11, color: '#5E6C84', padding: '4px 6px', borderBottom: '1px solid #DFE1E6' },
   td: { padding: '5px 6px', fontSize: 13, borderBottom: '1px solid #F4F5F7' },
+  memberCheckboxList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    marginTop: 4,
+    padding: '4px 0',
+  },
+  memberCheckbox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: 13,
+    color: '#172B4D',
+    cursor: 'pointer',
+  },
 };
