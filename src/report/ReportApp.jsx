@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import {
   getBoardTimeReport,
   resetCardTimeById,
@@ -128,6 +134,8 @@ export default function ReportApp({ t }) {
   const [confirmReset, setConfirmReset] = useState(null); // { cardId, cardName }
   const [confirmStop, setConfirmStop] = useState(null); // { activeMembers, label }
   const [cardInfoMap, setCardInfoMap] = useState({});
+  const [now, setNow] = useState(Date.now());
+  const tickRef = useRef(null);
 
   // Build filters from state
   const getFilters = useCallback(() => {
@@ -162,6 +170,19 @@ export default function ReportApp({ t }) {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Tick every second when any timer is active
+  useEffect(() => {
+    const hasActive = reportData.some((card) =>
+      Object.values(card.timeData).some((d) => d.activeStart != null),
+    );
+    if (hasActive) {
+      tickRef.current = setInterval(() => setNow(Date.now()), 1000);
+    } else {
+      clearInterval(tickRef.current);
+    }
+    return () => clearInterval(tickRef.current);
+  }, [reportData]);
 
   // Handle preset change
   const handlePresetChange = (preset) => {
@@ -243,7 +264,7 @@ export default function ReportApp({ t }) {
       results.sort((a, b) => a.label.localeCompare(b.label));
     }
     return results;
-  }, [reportData, groupBy, sortBy]);
+  }, [reportData, groupBy, sortBy, now]);
 
   const grandTotal = aggregated.reduce((s, r) => s + r.totalMs, 0);
 
