@@ -406,7 +406,7 @@ export default function ReportApp({ t }) {
             <tr style={{ borderTop: '2px solid #DFE1E6' }}>
               <td style={{ ...styles.td, fontWeight: 700 }}>Totalt</td>
               {groupBy === 'card' && <td />}
-              {groupBy === 'person' && <td />}
+              {groupBy === 'person' && <td style={styles.td} />}
               <td style={{ ...styles.td, textAlign: 'right', fontWeight: 700 }}>
                 {formatDuration(grandTotal)}
               </td>
