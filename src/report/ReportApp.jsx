@@ -405,7 +405,7 @@ export default function ReportApp({ t }) {
         </div>
 
         {view === "chart" && (
-          <div style={styles.controlGroup}>
+          <div style={{ ...styles.controlGroup, marginLeft: -4 }}>
             <label style={styles.label}>Graftype:</label>
             <select
               value={chartType}
