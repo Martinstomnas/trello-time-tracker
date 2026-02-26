@@ -385,7 +385,9 @@ export default function ReportApp({ t }) {
         </div>
 
         <div style={styles.controlGroup}>
-          <label style={styles.label}>Visning:</label>
+          <label style={{ ...styles.label, position: "relative", top: 8 }}>
+            Visning:
+          </label>
           <div style={styles.toggleGroup}>
             <button
               onClick={() => setView("table")}
@@ -770,7 +772,7 @@ const styles = {
     display: "flex",
     flexWrap: "wrap",
     gap: 12,
-    alignItems: "flex-end",
+    alignItems: "flex-end", // Ensures labels align at top because inputs align at bottom
     marginBottom: 16,
     paddingBottom: 12,
     borderBottom: "1px solid #DFE1E6",
@@ -789,32 +791,50 @@ const styles = {
     fontSize: 14,
     backgroundColor: "#fff",
     cursor: "pointer",
+    height: 34,
+    boxSizing: "border-box",
+    verticalAlign: "middle", // Ensures consistent vertical alignment
   },
-  toggleGroup: { display: "flex", gap: 0 },
+  toggleGroup: { display: "flex", gap: 0, height: 50 },
   toggle: {
-    padding: "6px 14px",
+    padding: "0 14px", // Reset vertical padding, use flex centering
     border: "1px solid #DFE1E6",
     backgroundColor: "#fff",
     cursor: "pointer",
     fontSize: 13,
+    height: 34,
+    boxSizing: "border-box",
+    display: "inline-flex", // Center content precisely
+    alignItems: "center",
+    justifyContent: "center",
+    verticalAlign: "middle",
   },
   toggleActive: {
-    padding: "6px 14px",
+    padding: "0 14px",
     border: "1px solid #0079BF",
     backgroundColor: "#E4F0F6",
     color: "#0079BF",
     cursor: "pointer",
     fontSize: 13,
     fontWeight: 600,
+    height: 34,
+    boxSizing: "border-box",
+    display: "inline-flex", // Center content precisely
+    alignItems: "center",
+    justifyContent: "center",
+    verticalAlign: "middle",
   },
   exportBtn: {
-    padding: "6px 14px",
+    padding: "0 14px",
     border: "1px solid #DFE1E6",
     borderRadius: 4,
     backgroundColor: "#fff",
     cursor: "pointer",
     fontSize: 13,
     marginLeft: 4,
+    height: 34,
+    boxSizing: "border-box",
+    verticalAlign: "middle",
   },
 
   // Content
