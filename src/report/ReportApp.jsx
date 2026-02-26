@@ -455,18 +455,27 @@ export default function ReportApp({ t }) {
                 style={{
                   ...styles.th,
                   textAlign: "right",
-                  width: 110,
-                  minWidth: 110,
+                  whiteSpace: "nowrap",
                 }}
               >
                 Tid
               </th>
-              <th style={{ ...styles.th, textAlign: "right", width: 80 }}>
+              <th
+                style={{
+                  ...styles.th,
+                  textAlign: "right",
+                  whiteSpace: "nowrap",
+                }}
+              >
                 Andel
               </th>
               {groupBy === "card" && (
                 <th
-                  style={{ ...styles.th, textAlign: "center", width: 120 }}
+                  style={{
+                    ...styles.th,
+                    textAlign: "center",
+                    whiteSpace: "nowrap",
+                  }}
                 ></th>
               )}
             </tr>
@@ -508,8 +517,7 @@ export default function ReportApp({ t }) {
                     ...styles.td,
                     textAlign: "right",
                     fontWeight: 600,
-                    width: 110,
-                    minWidth: 110,
+                    whiteSpace: "nowrap",
                     fontVariantNumeric: "tabular-nums",
                   }}
                 >
@@ -531,7 +539,12 @@ export default function ReportApp({ t }) {
                   )}
                 </td>
                 <td
-                  style={{ ...styles.td, textAlign: "right", color: "#5E6C84" }}
+                  style={{
+                    ...styles.td,
+                    textAlign: "right",
+                    color: "#5E6C84",
+                    whiteSpace: "nowrap",
+                  }}
                 >
                   {grandTotal > 0
                     ? ((row.totalMs / grandTotal) * 100).toFixed(1) + "%"
@@ -545,6 +558,7 @@ export default function ReportApp({ t }) {
                       padding: "4px 6px",
                       verticalAlign: "middle",
                       lineHeight: 1,
+                      whiteSpace: "nowrap",
                     }}
                   >
                     <button
@@ -570,21 +584,18 @@ export default function ReportApp({ t }) {
                 borderBottom: "2px solid #DFE1E6",
               }}
             >
+              <td style={{ ...styles.td, fontWeight: 700 }}>Totalt</td>
+              {groupBy === "card" && <td />}
+              {groupBy === "person" && <td style={styles.td} />}
               <td
                 style={{
                   ...styles.td,
                   textAlign: "right",
                   fontWeight: 700,
-                  width: 110,
-                  minWidth: 110,
+                  whiteSpace: "nowrap",
                   fontVariantNumeric: "tabular-nums",
                 }}
               >
-                {formatDuration(grandTotal)}
-              </td>
-              {groupBy === "card" && <td />}
-              {groupBy === "person" && <td style={styles.td} />}
-              <td style={{ ...styles.td, textAlign: "right", fontWeight: 700 }}>
                 {formatDuration(grandTotal)}
               </td>
               <td style={{ ...styles.td, textAlign: "right" }}>100%</td>
@@ -817,18 +828,21 @@ const styles = {
     textTransform: "uppercase",
     padding: "8px 10px",
     borderBottom: "2px solid #DFE1E6",
+    backgroundColor: "#fff",
   },
   td: {
     padding: "8px 10px",
     fontSize: 14,
     borderBottom: "1px solid #F4F5F7",
     color: "#172B4D",
+    backgroundColor: "inherit",
   },
   tdSub: {
     padding: "8px 10px",
     fontSize: 13,
     borderBottom: "1px solid #F4F5F7",
     color: "#5E6C84",
+    backgroundColor: "inherit",
   },
   chartContainer: { padding: "16px 0", maxHeight: 420 },
 
