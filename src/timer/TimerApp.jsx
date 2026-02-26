@@ -240,6 +240,7 @@ export default function TimerApp({ t }) {
                   checked={selectedMembers.includes('self')}
                   onChange={() => toggleMember('self')}
                   disabled={saving}
+                  style={{ margin: 0 }} 
                 />
                 <span>Meg selv</span>
               </label>
@@ -252,6 +253,7 @@ export default function TimerApp({ t }) {
                       checked={selectedMembers.includes(m.id)}
                       onChange={() => toggleMember(m.id)}
                       disabled={saving}
+                      style={{ margin: 0 }}
                     />
                     <span>{m.fullName}</span>
                   </label>
