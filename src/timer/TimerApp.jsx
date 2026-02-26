@@ -169,7 +169,7 @@ export default function TimerApp({ t }) {
     if (saving) return '...';
     if (selectedMembers.length === 0) return '▶ Start';
     if (allSelectedRunning) return '⏹ Stopp';
-    if (anySelectedRunning) return '▶ Start resten';
+    if (anySelectedRunning) return '▶ Start';
     return '▶ Start';
   };
 
@@ -203,7 +203,7 @@ export default function TimerApp({ t }) {
 
       {/* Manual adjustment */}
       <div style={styles.section}>
-        <div style={styles.sectionTitle}>Manuell justering</div>
+        <div style={styles.sectionTitle}>Manuell registrering</div>
         <div style={styles.manualRow}>
           <input
             type="text"
