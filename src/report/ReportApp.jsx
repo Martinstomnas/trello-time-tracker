@@ -348,7 +348,7 @@ export default function ReportApp({ t }) {
           </thead>
           <tbody>
             {aggregated.map((row, i) => (
-              <tr key={i} style={i % 2 === 0 ? {} : { backgroundColor: '#FAFBFC' }}>
+              <tr key={i} style={i % 2 === 0 ? {} : { backgroundColor: '#FAFBFC' }} >
                 <td style={styles.td}>
                   {groupBy === 'label' && row.color && (
                     <span
@@ -403,7 +403,7 @@ export default function ReportApp({ t }) {
             ))}
           </tbody>
           <tfoot>
-            <tr style={{ borderTop: '2px solid #DFE1E6' }}>
+            <tr style={{ borderTop: '2px solid #DFE1E6', borderBottom: '2px solid #DFE1E6' }}>
               <td style={{ ...styles.td, fontWeight: 700 }}>Totalt</td>
               {groupBy === 'card' && <td />}
               {groupBy === 'person' && <td style={styles.td} />}

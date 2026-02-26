@@ -296,13 +296,13 @@ export default function TimerApp({ t }) {
               ))}
             </tbody>
             <tfoot>
-              <tr>
-                <td style={{ ...styles.td, fontWeight: 600 }}>Totalt</td>
-                <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600 }}>
-                  {formatDuration(grandTotal)}
-                </td>
-                <td />
-              </tr>
+            <tr style={{ borderBottom: '1px solid #DFE1E6' }}>
+              <td style={{ ...styles.td, borderBottom: 'none', fontWeight: 600 }}>Totalt</td>
+              <td style={{ ...styles.td, borderBottom: 'none', textAlign: 'right', fontWeight: 600 }}>
+                {formatDuration(grandTotal)}
+              </td>
+              <td style={{ ...styles.td, borderBottom: 'none' }} />
+            </tr>
             </tfoot>
           </table>
         </div>
