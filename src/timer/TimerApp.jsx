@@ -220,19 +220,21 @@ export default function TimerApp({ t }) {
             −
           </button>
         </div>
-        <div style={styles.dateRow}>
-          <input
-            type="date"
-            value={manualDate}
-            onChange={(e) => setManualDate(e.target.value)}
-            style={styles.dateInput}
-            disabled={saving}
-          />
-          <span style={styles.dateHint}>{manualDate ? '' : 'Dato (valgfritt – standard er i dag)'}</span>
-        </div>
+        <div style={{ marginTop: 6 }}>
+  <span style={styles.label}>Dato</span>
+          <div style={styles.dateRow}>
+            <input
+              type="date"
+              value={manualDate}
+              onChange={(e) => setManualDate(e.target.value)}
+              style={styles.dateInput}
+              disabled={saving}
+            />
+          </div>
+          </div>
         {boardMembers.length > 1 && (
           <div style={{ marginTop: 6 }}>
-            <span style={styles.dateHint}>Personer</span>
+            <span style={styles.label}>Personer</span>
             <div style={styles.memberCheckboxList}>
               <label style={styles.memberCheckbox}>
                 <input
@@ -266,7 +268,6 @@ export default function TimerApp({ t }) {
       {/* Per-person breakdown */}
       {members.length > 0 && (
         <div style={styles.section}>
-          <div style={styles.sectionTitle}>Alle på dette kortet</div>
           <table style={styles.table}>
             <thead>
               <tr>
@@ -345,7 +346,7 @@ const styles = {
     fontSize: 13,
     color: '#172B4D',
   },
-  dateHint: { fontSize: 12, color: '#A5ADBA' },
+  label: { fontSize: 12, color: '#5E6C84' },
   
  smallBtn: {
   width: 40,
