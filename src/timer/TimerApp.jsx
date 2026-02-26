@@ -308,7 +308,9 @@ export default function TimerApp({ t }) {
             <thead>
               <tr>
                 <th style={styles.th}>Person</th>
-                <th style={{ ...styles.th, textAlign: "right" }}>Tid</th>
+                <th style={{ ...styles.th, textAlign: "right", width: 120 }}>
+                  Tid
+                </th>
                 <th style={{ ...styles.th, textAlign: "center", width: 40 }}>
                   Status
                 </th>
@@ -318,7 +320,16 @@ export default function TimerApp({ t }) {
               {members.map((m) => (
                 <tr key={m.id}>
                   <td style={styles.td}>{m.name}</td>
-                  <td style={{ ...styles.td, textAlign: "right" }}>
+                  <td
+                    style={{
+                      ...styles.td,
+                      textAlign: "right",
+                      fontVariantNumeric: "tabular-nums",
+                      fontFamily: "monospace, sans-serif",
+                      whiteSpace: "nowrap",
+                      width: 120,
+                    }}
+                  >
                     {formatDuration(m.total)}
                   </td>
                   <td style={{ ...styles.td, textAlign: "center" }}>
@@ -353,6 +364,10 @@ export default function TimerApp({ t }) {
                     borderBottom: "none",
                     textAlign: "right",
                     fontWeight: 600,
+                    fontVariantNumeric: "tabular-nums",
+                    fontFamily: "monospace, sans-serif",
+                    whiteSpace: "nowrap",
+                    width: 120,
                   }}
                 >
                   {formatDuration(grandTotal)}
@@ -462,13 +477,13 @@ const styles = {
   },
   memberCheckbox: {
     display: "flex",
-    alignItems: "center", // Sentrerer boksen og teksten vertikalt
-    gap: 6, // Avstand mellom boks og tekst
+    alignItems: "center",
+    gap: 6,
     fontSize: 13,
     color: "#172B4D",
     cursor: "pointer",
-    margin: 0, // VIKTIG: Fjerner standard margin fra <label>
-    padding: "2px 0", // Minimal luft over/under hver linje
-    minHeight: 24, // Sikrer at linjen har en fast høyde
+    margin: 0,
+    padding: "2px 0",
+    minHeight: 24,
   },
 };
