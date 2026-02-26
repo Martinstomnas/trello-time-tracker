@@ -388,16 +388,19 @@ const styles = {
   memberCheckboxList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 4,
+    gap: 0,
     marginTop: 4,
-    padding: '4px 0',
+    padding: '0',
   },
   memberCheckbox: {
     display: 'flex',
-    alignItems: 'center',
-    gap: 6,
+    alignItems: 'center', // Sentrerer boksen og teksten vertikalt
+    gap: 6,               // Avstand mellom boks og tekst
     fontSize: 13,
     color: '#172B4D',
     cursor: 'pointer',
+    margin: 0,            // VIKTIG: Fjerner standard margin fra <label>
+    padding: '2px 0',     // Minimal luft over/under hver linje
+    minHeight: 24,        // Sikrer at linjen har en fast høyde
   },
 };
