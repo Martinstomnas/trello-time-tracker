@@ -101,6 +101,7 @@ VITE_SUPABASE_ANON_KEY=your-publishable-key
 ```
 
 ### 4. Run locally (development)
+
 ```bash
 npm run dev
 ```
@@ -110,6 +111,7 @@ This starts a local HTTPS server at `https://localhost:3000/`.
 **First time:** Open `https://localhost:3000/connector.html` in your browser and accept the self-signed certificate warning.
 
 **Trello setup for local dev:**
+
 1. Go to [Power-Up Admin](https://trello.com/power-ups/admin)
 2. Create a separate Power-Up (e.g. "Time Tracker DEV")
 3. Set Iframe connector URL to: `https://localhost:3000/connector.html`
@@ -189,11 +191,12 @@ trello-time-tracker/
 All data is stored in Supabase (PostgreSQL):
 
 **`time_entries`** – One row per completed time session:
+
 - `board_id`, `card_id`, `card_name`, `list_name`
 - `member_id`, `member_name`
 - `started_at`, `ended_at`, `duration_ms`
 - `labels` (JSON array from Trello)
 
 **`active_timers`** – One row per currently running timer:
-- `board_id`, `card_id`, `member_id`, `member_name`, `started_at`
 
+- `board_id`, `card_id`, `member_id`, `member_name`, `started_at`
