@@ -904,10 +904,10 @@ const styles = {
 
   // Active time
   activeTimeText: {
-    color: "#EB5A46",
+    color: "#61BD4F",
     cursor: "pointer",
     textDecoration: "none",
-    borderBottom: "1px dashed #EB5A46",
+    borderBottom: "1px dashed #61BD4F",
     paddingBottom: 1,
   },
   activeList: {
@@ -928,7 +928,7 @@ const styles = {
     width: 8,
     height: 8,
     borderRadius: "50%",
-    backgroundColor: "#EB5A46",
+    backgroundColor: "#61BD4F",
     flexShrink: 0,
   },
   activeCardName: {

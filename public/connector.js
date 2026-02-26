@@ -157,7 +157,7 @@ if (!window.TrelloPowerUp) {
                 {
                   icon: BASE + "/clock-icon.svg",
                   text: formatDuration(total, true),
-                  color: active ? "red" : "green",
+                  color: active ? "green" : "null",
                   refresh: 30,
                 },
               ];
@@ -181,7 +181,7 @@ if (!window.TrelloPowerUp) {
                 {
                   title: "Registrert tid",
                   text: formatDuration(total, false),
-                  color: active ? "red" : "green",
+                  color: active ? "green" : "null",
                   callback: function (tc) {
                     return tc.popup({
                       title: "Tidstracker",

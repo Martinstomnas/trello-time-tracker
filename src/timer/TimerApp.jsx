@@ -328,7 +328,7 @@ export default function TimerApp({ t }) {
                         width: 10,
                         height: 10,
                         borderRadius: "50%",
-                        backgroundColor: m.active ? "#EB5A46" : "#61BD4F",
+                        backgroundColor: m.active ? "#61BD4F" : "#D3D3D3",
                       }}
                       title={m.active ? "Timer kjører" : "Inaktiv"}
                     />
