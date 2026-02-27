@@ -136,6 +136,7 @@ export default function ReportApp({ t }) {
   const [cardInfoMap, setCardInfoMap] = useState({});
   const [now, setNow] = useState(Date.now());
   const tickRef = useRef(null);
+  const pollRef = useRef(null);
 
   // Build filters from state
   const getFilters = useCallback(() => {
@@ -166,6 +167,18 @@ export default function ReportApp({ t }) {
     }
   }, [t, getFilters]);
 
+  // Silent reload (no loading spinner) for polling
+  const silentReload = useCallback(async () => {
+    try {
+      const filters = getFilters();
+      const result = await getBoardTimeReport(t, filters);
+      setReportData(result.cards);
+      setCardInfoMap(result.cardInfoMap);
+    } catch (err) {
+      console.error("Silent reload error:", err);
+    }
+  }, [t, getFilters]);
+
   // Load on mount and when filters change
   useEffect(() => {
     loadData();
@@ -183,6 +196,37 @@ export default function ReportApp({ t }) {
     }
     return () => clearInterval(tickRef.current);
   }, [reportData]);
+
+  // Poll Supabase every 5s to detect changes from other users
+  useEffect(() => {
+    const POLL_INTERVAL = 5000;
+
+    const startPolling = () => {
+      clearInterval(pollRef.current);
+      pollRef.current = setInterval(() => {
+        if (document.visibilityState === "visible") {
+          silentReload();
+        }
+      }, POLL_INTERVAL);
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        silentReload(); // Refresh immediately when tab becomes visible
+        startPolling();
+      } else {
+        clearInterval(pollRef.current);
+      }
+    };
+
+    startPolling();
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(pollRef.current);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [silentReload]);
 
   // Handle preset change
   const handlePresetChange = (preset) => {

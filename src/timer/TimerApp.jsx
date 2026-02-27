@@ -27,6 +27,7 @@ export default function TimerApp({ t }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const tickRef = useRef(null);
+  const pollRef = useRef(null);
 
   // Toggle a member in the multi-select
   const toggleMember = useCallback((id) => {
@@ -99,6 +100,37 @@ export default function TimerApp({ t }) {
     }
     return () => clearInterval(tickRef.current);
   }, [timeData]);
+
+  // Poll Supabase every 5s to detect changes from other users
+  useEffect(() => {
+    const POLL_INTERVAL = 5000;
+
+    const startPolling = () => {
+      clearInterval(pollRef.current);
+      pollRef.current = setInterval(() => {
+        if (document.visibilityState === "visible") {
+          refreshData();
+        }
+      }, POLL_INTERVAL);
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refreshData(); // Refresh immediately when tab becomes visible
+        startPolling();
+      } else {
+        clearInterval(pollRef.current);
+      }
+    };
+
+    startPolling();
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(pollRef.current);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [refreshData]);
 
   // Derived state for current user
   const myData = memberId ? timeData[memberId] : null;
