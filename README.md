@@ -202,3 +202,7 @@ All data is stored in Supabase (PostgreSQL):
 **`active_timers`** – One row per currently running timer:
 
 - `board_id`, `card_id`, `member_id`, `member_name`, `started_at`
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
