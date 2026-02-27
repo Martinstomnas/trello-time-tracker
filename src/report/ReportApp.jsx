@@ -657,19 +657,48 @@ export default function ReportApp({ t }) {
 // Trello label color mapping
 function trelloLabelColor(color) {
   const map = {
-    green: "#61BD4F",
-    yellow: "#F2D600",
-    orange: "#FF9F1A",
-    red: "#EB5A46",
-    purple: "#C377E0",
-    blue: "#0079BF",
-    sky: "#00C2E0",
-    lime: "#51E898",
-    pink: "#FF78CB",
-    black: "#344563",
-    gray: "#B3BAC5",
+    // Green
+    green_light: "#BAF3DB",
+    green: "#4BCE97",
+    green_dark: "#1F845A",
+    // Yellow
+    yellow_light: "#F5E989",
+    yellow: "#EED12B",
+    yellow_dark: "#946F00",
+    // Orange
+    orange_light: "#FCE4A6",
+    orange: "#FCA700",
+    orange_dark: "#BD5B00",
+    // Red
+    red_light: "#FFD5D2",
+    red: "#F87168",
+    red_dark: "#C9372C",
+    // Purple
+    purple_light: "#EED7FC",
+    purple: "#C97CF4",
+    purple_dark: "#964AC0",
+    // Blue
+    blue_light: "#CFE1FD",
+    blue: "#669DF1",
+    blue_dark: "#1868DB",
+    // Sky (teal i Atlassian)
+    sky_light: "#C6EDFB",
+    sky: "#6CC3E0",
+    sky_dark: "#227D9B",
+    // Lime
+    lime_light: "#D3F1A7",
+    lime: "#94C748",
+    lime_dark: "#5B7F24",
+    // Pink (magenta i Atlassian)
+    pink_light: "#FDD0EC",
+    pink: "#E774BB",
+    pink_dark: "#AE4787",
+    // Black (gray i Atlassian)
+    black_light: "#DDDEE1",
+    black: "#8C8F97",
+    black_dark: "#6B6E76",
   };
-  return map[color] || "#B3BAC5";
+  return map[color] || "#8C8F97";
 }
 
 // Styles
