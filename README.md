@@ -2,28 +2,20 @@
 
 A free, open-source Trello Power-Up for time tracking. Track time per card, per person, view reports with charts and date filtering, and export to CSV/JSON.
 
-# Trello Time Tracker Power-Up
-
-A free, open-source Trello Power-Up for time tracking. Track time per card, per person, view reports with charts and date filtering, and export to CSV/JSON.
-
 ## Features
 
 - **Start/stop timer** on any Trello card with one click
 - **Per-person tracking** – each member logs time under their own identity
 - **Multi-user timer control** – start and stop timers for other board members from the same popup
-- **Live card badges** – badges on card fronts update every 3 seconds with seconds displayed while a timer is running
-- **Visual badge** on cards (red = timer running, green = time logged)
+- **Visual badge** on cards (green = timer running)
 - **Manual time entry** – add or subtract time with custom date and member selection
 - **Adjust time for others** – log time on behalf of other board members
 - **Board-level reports** with:
-  - Date filtering (today, this week, this month, custom range)
+  - Date filtering (today, yesterday, this/last week, this/last month, this year, custom range)
   - Grouping by card, person, or label
   - "Active cards" column when grouping by person
   - Table and chart views (bar chart, pie chart)
-  - Charts use Trello's actual label colors when grouping by label
   - CSV and JSON export
-- **Stable layout** – time columns use tabular numerals and fixed widths to prevent jitter during live counting
-- **Per-person sorting** – member breakdown sorted by most tracked time first
 - **Multi-board support** – each board has isolated data
 
 ## Tech Stack
