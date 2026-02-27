@@ -44,8 +44,10 @@ export default function TimerApp({ t }) {
       const data = await getCardTimeData(t);
       setTimeData(data);
       setNow(Date.now());
+      return data;
     } catch (e) {
       console.error("[TimeTracker] refreshData error:", e);
+      return {};
     }
   }, [t]);
 
@@ -56,13 +58,29 @@ export default function TimerApp({ t }) {
       setMemberId(member.id);
       setMemberName(member.fullName);
       // Fetch board members for the multi-select
+      let members = [];
       try {
         const board = await t.board("members");
-        setBoardMembers(board.members || []);
+        members = board.members || [];
+        setBoardMembers(members);
       } catch (e) {
         console.warn("[TimeTracker] Could not fetch board members:", e);
       }
-      await refreshData();
+      const data = await refreshData();
+
+      // Pre-select members that have active timers on this card
+      const activeIds = Object.keys(data).filter(
+        (id) => data[id]?.activeStart != null,
+      );
+      if (activeIds.length > 0) {
+        const selected = activeIds.map((id) =>
+          id === member.id ? "self" : id,
+        );
+        // Ensure "self" is included if current user has an active timer
+        setSelectedMembers(selected);
+      }
+      // else: keep default ["self"]
+
       setLoading(false);
     }
     init();

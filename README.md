@@ -6,12 +6,14 @@ A free, open-source Trello Power-Up for time tracking. Track time per card, per 
 
 - **Start/stop timer** on any Trello card with one click
 - **Per-person tracking** – each member logs time under their own identity
-- **Visual badge** on cards (red = timer running, green = time logged)
+- **Multi-user timer control** – start and stop timers for other board members from the same popup
+- **Visual badge** on cards (green = timer running)
 - **Manual time entry** – add or subtract time with custom date and member selection
 - **Adjust time for others** – log time on behalf of other board members
 - **Board-level reports** with:
-  - Date filtering (today, this week, this month, custom range)
+  - Date filtering (today, yesterday, this/last week, this/last month, this year, custom range)
   - Grouping by card, person, or label
+  - "Active cards" column when grouping by person
   - Table and chart views (bar chart, pie chart)
   - CSV and JSON export
 - **Multi-board support** – each board has isolated data
@@ -182,6 +184,7 @@ trello-time-tracker/
 ├── settings.html           # Settings popup HTML
 ├── vite.config.js          # Vite config with env injection plugin
 ├── package.json
+├── LICENSE                 # MIT License
 └── .env.example            # Template for environment variables
 
 ```
@@ -200,3 +203,7 @@ All data is stored in Supabase (PostgreSQL):
 **`active_timers`** – One row per currently running timer:
 
 - `board_id`, `card_id`, `member_id`, `member_name`, `started_at`
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
