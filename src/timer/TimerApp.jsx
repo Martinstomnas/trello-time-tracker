@@ -18,7 +18,7 @@ import {
 export default function TimerApp({ t }) {
   const [timeData, setTimeData] = useState({});
   const [memberId, setMemberId] = useState(null);
-  const [memberName, setMemberName] = useState("");
+  const [memberName, setMemberName] = useState(""); // reserved for future use
   const [now, setNow] = useState(Date.now());
   const [manualInput, setManualInput] = useState("");
   const [manualDate, setManualDate] = useState("");
