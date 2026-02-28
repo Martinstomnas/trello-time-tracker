@@ -81,6 +81,19 @@ function getCardTimeData(cardId) {
   });
 }
 
+function getCardEstimateTotal(cardId) {
+  return supabaseGet(
+    "time_estimates",
+    "select=estimated_ms&card_id=eq." + cardId,
+  ).then(function (estimates) {
+    var total = 0;
+    for (var i = 0; i < estimates.length; i++) {
+      total += estimates[i].estimated_ms || 0;
+    }
+    return total;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Formatting helpers
 // ---------------------------------------------------------------------------
@@ -149,15 +162,38 @@ if (!window.TrelloPowerUp) {
         return t
           .card("id")
           .then(function (card) {
-            return getCardTimeData(card.id).then(function (data) {
+            return Promise.all([
+              getCardTimeData(card.id),
+              getCardEstimateTotal(card.id),
+            ]).then(function (results) {
+              var data = results[0];
+              var estimateTotal = results[1];
               var total = cardTotalMs(data);
               var active = hasActiveTimer(data);
-              if (total === 0 && !active) return [];
+              if (total === 0 && !active && !estimateTotal) return [];
+
+              var text;
+              if (estimateTotal > 0) {
+                text =
+                  formatDuration(total, true) +
+                  " / " +
+                  formatDuration(estimateTotal, true);
+              } else {
+                text = formatDuration(total, true);
+              }
+
+              var color = null;
+              if (active) {
+                color = "green";
+              } else if (estimateTotal > 0 && total > estimateTotal) {
+                color = "red";
+              }
+
               return [
                 {
                   icon: BASE + "/clock-icon.svg",
-                  text: formatDuration(total, true),
-                  color: active ? "green" : null,
+                  text: text,
+                  color: color,
                   refresh: 30,
                 },
               ];
@@ -173,11 +209,17 @@ if (!window.TrelloPowerUp) {
         return t
           .card("id")
           .then(function (card) {
-            return getCardTimeData(card.id).then(function (data) {
+            return Promise.all([
+              getCardTimeData(card.id),
+              getCardEstimateTotal(card.id),
+            ]).then(function (results) {
+              var data = results[0];
+              var estimateTotal = results[1];
               var total = cardTotalMs(data);
               var active = hasActiveTimer(data);
-              if (total === 0 && !active) return [];
-              return [
+              if (total === 0 && !active && !estimateTotal) return [];
+
+              var badges = [
                 {
                   title: "Registrert tid",
                   text: formatDuration(total, false),
@@ -191,6 +233,24 @@ if (!window.TrelloPowerUp) {
                   },
                 },
               ];
+
+              if (estimateTotal > 0) {
+                var isOver = total > estimateTotal;
+                badges.push({
+                  title: "Estimert tid",
+                  text: formatDuration(estimateTotal, false),
+                  color: isOver ? "red" : "blue",
+                  callback: function (tc) {
+                    return tc.popup({
+                      title: "Tidstracker",
+                      url: BASE + "/timer.html",
+                      height: 400,
+                    });
+                  },
+                });
+              }
+
+              return badges;
             });
           })
           .catch(function (e) {
