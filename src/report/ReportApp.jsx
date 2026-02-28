@@ -117,7 +117,7 @@ function formatDateInput(isoString) {
   return isoString.slice(0, 10); // YYYY-MM-DD
 }
 
-export default function ReportApp({ t }) {
+export default function ReportApp({ t, hideHeader }) {
   const [reportData, setReportData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -343,7 +343,7 @@ export default function ReportApp({ t }) {
     <div style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
-        <h2 style={styles.title}>Tidsrapport</h2>
+        {!hideHeader && <h2 style={styles.title}>Tidsrapport</h2>}
         <div style={styles.totalBadge}>
           {activeLabel}:{" "}
           <strong style={styles.totalBadgeTime}>

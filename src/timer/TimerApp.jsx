@@ -11,6 +11,11 @@ import {
   getTotalWithActive,
   parseDuration,
 } from "../utils/time.js";
+import {
+  getCardEstimates,
+  setEstimate,
+  removeEstimate,
+} from "../utils/estimateStorage.js";
 
 /**
  * TimerApp – The popup shown when a user clicks "Tidstracker" on a card.
@@ -26,6 +31,10 @@ export default function TimerApp({ t }) {
   const [boardMembers, setBoardMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [estimates, setEstimates] = useState({});
+  const [estimateInput, setEstimateInput] = useState("");
+  const [estimateExpanded, setEstimateExpanded] = useState(false);
+  const [savingEstimate, setSavingEstimate] = useState(false);
   const tickRef = useRef(null);
   const pollRef = useRef(null);
 
@@ -52,6 +61,15 @@ export default function TimerApp({ t }) {
     }
   }, [t]);
 
+  const refreshEstimates = useCallback(async () => {
+    try {
+      const data = await getCardEstimates(t);
+      setEstimates(data);
+    } catch (e) {
+      console.error("[TimeTracker] refreshEstimates error:", e);
+    }
+  }, [t]);
+
   // Load data on mount
   useEffect(() => {
     async function init() {
@@ -68,6 +86,7 @@ export default function TimerApp({ t }) {
         console.warn("[TimeTracker] Could not fetch board members:", e);
       }
       const data = await refreshData();
+      await refreshEstimates();
 
       // Pre-select members that have active timers on this card
       const activeIds = Object.keys(data).filter(
@@ -226,6 +245,57 @@ export default function TimerApp({ t }) {
       setSaving(false);
     }
   }, [t, manualInput, manualDate, getTargetMembers, refreshData]);
+
+  const handleSetEstimate = useCallback(
+    async (input) => {
+      const ms = parseDuration(input);
+      if (!ms || ms <= 0) return;
+
+      setSavingEstimate(true);
+      try {
+        const targets =
+          selectedMembers.includes("self") && selectedMembers.length === 1
+            ? [null]
+            : selectedMembers
+                .map((id) => {
+                  if (id === "self")
+                    return { id: memberId, fullName: memberName };
+                  const bm = boardMembers.find((m) => m.id === id);
+                  return bm ? { id: bm.id, fullName: bm.fullName } : null;
+                })
+                .filter(Boolean);
+
+        for (const target of targets) {
+          await setEstimate(t, ms, target);
+        }
+
+        setEstimateInput("");
+        await refreshEstimates();
+      } catch (e) {
+        console.error("[TimeTracker] handleSetEstimate error:", e);
+      } finally {
+        setSavingEstimate(false);
+      }
+    },
+    [t, selectedMembers, memberId, memberName, boardMembers, refreshEstimates],
+  );
+
+  const handleRemoveEstimate = useCallback(
+    async (targetMemberId) => {
+      setSavingEstimate(true);
+      try {
+        const target =
+          targetMemberId === memberId ? null : { id: targetMemberId };
+        await removeEstimate(t, target);
+        await refreshEstimates();
+      } catch (e) {
+        console.error("[TimeTracker] handleRemoveEstimate error:", e);
+      } finally {
+        setSavingEstimate(false);
+      }
+    },
+    [t, memberId, refreshEstimates],
+  );
 
   if (loading) {
     return <div style={styles.center}>Laster...</div>;
@@ -430,6 +500,159 @@ export default function TimerApp({ t }) {
           </table>
         </div>
       )}
+
+      {/* ── Estimat-seksjon ─────────────────────────────────── */}
+      <div style={styles.section}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            cursor: "pointer",
+          }}
+          onClick={() => setEstimateExpanded(!estimateExpanded)}
+        >
+          <span style={styles.sectionTitle}>
+            Estimat{" "}
+            {Object.keys(estimates).length > 0
+              ? `(${Object.keys(estimates).length})`
+              : ""}
+          </span>
+          <span style={{ fontSize: 12, color: "#5E6C84" }}>
+            {estimateExpanded ? "▲" : "▼"}
+          </span>
+        </div>
+
+        {estimateExpanded && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+              <input
+                type="text"
+                placeholder="f.eks. 2t 30m"
+                value={estimateInput}
+                onChange={(e) => setEstimateInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSetEstimate(estimateInput);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "5px 8px",
+                  border: "1px solid #DFE1E6",
+                  borderRadius: 4,
+                  fontSize: 13,
+                }}
+                disabled={savingEstimate}
+              />
+              <button
+                onClick={() => handleSetEstimate(estimateInput)}
+                disabled={savingEstimate || !estimateInput.trim()}
+                style={{
+                  ...styles.smallBtn,
+                  backgroundColor: "#0079BF",
+                  opacity: savingEstimate || !estimateInput.trim() ? 0.5 : 1,
+                }}
+                title="Sett estimat"
+              >
+                ✓
+              </button>
+            </div>
+
+            <div style={{ fontSize: 11, color: "#8993A4", marginBottom: 8 }}>
+              Settes for valgte person(er) over.
+            </div>
+
+            {Object.keys(estimates).length > 0 && (
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={{ ...styles.th, fontSize: 10 }}>Person</th>
+                    <th
+                      style={{
+                        ...styles.th,
+                        fontSize: 10,
+                        textAlign: "right",
+                      }}
+                    >
+                      Estimat
+                    </th>
+                    <th
+                      style={{
+                        ...styles.th,
+                        fontSize: 10,
+                        textAlign: "right",
+                      }}
+                    >
+                      Faktisk
+                    </th>
+                    <th style={{ ...styles.th, fontSize: 10, width: 30 }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(estimates).map(([mId, est]) => {
+                    const actual = timeData[mId]
+                      ? getTotalWithActive(timeData[mId])
+                      : 0;
+                    const isOver = actual > est.estimatedMs;
+                    return (
+                      <tr key={mId}>
+                        <td style={{ ...styles.td, fontSize: 12 }}>
+                          {est.name || mId}
+                          {mId === memberId ? " (deg)" : ""}
+                        </td>
+                        <td
+                          style={{
+                            ...styles.td,
+                            fontSize: 12,
+                            textAlign: "right",
+                            fontWeight: 600,
+                            fontFamily: "monospace",
+                          }}
+                        >
+                          {formatDuration(est.estimatedMs, true)}
+                        </td>
+                        <td
+                          style={{
+                            ...styles.td,
+                            fontSize: 12,
+                            textAlign: "right",
+                            fontFamily: "monospace",
+                            color: isOver ? "#EB5A46" : "#172B4D",
+                          }}
+                        >
+                          {formatDuration(actual, true)}
+                        </td>
+                        <td
+                          style={{
+                            ...styles.td,
+                            textAlign: "center",
+                            padding: "2px",
+                          }}
+                        >
+                          <button
+                            onClick={() => handleRemoveEstimate(mId)}
+                            disabled={savingEstimate}
+                            style={{
+                              border: "none",
+                              background: "none",
+                              cursor: "pointer",
+                              fontSize: 12,
+                              color: "#B04632",
+                              padding: "2px 4px",
+                            }}
+                            title="Fjern estimat"
+                          >
+                            ✕
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
