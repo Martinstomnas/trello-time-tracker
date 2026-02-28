@@ -61,6 +61,7 @@ export default defineConfig({
         timer: resolve(__dirname, "timer.html"),
         report: resolve(__dirname, "report.html"),
         settings: resolve(__dirname, "settings.html"),
+        estimateCard: resolve(__dirname, "estimate-card.html"),
       },
     },
   },

@@ -12,11 +12,6 @@ import {
   adjustTime,
 } from "../utils/storage.js";
 import {
-  getCardEstimates,
-  setEstimate,
-  removeEstimate,
-} from "../utils/estimateStorage.js";
-import {
   formatDuration,
   formatTimer,
   parseDuration,
@@ -25,13 +20,9 @@ import {
 
 /**
  * TimerApp – Card-level timer popup.
- *
- * Changes:
- * - Estimate column shows "2t (oppr. 4t)" when estimate was re-estimated
- * - Gjenstående column: always auto-calculated (estimat − faktisk)
- * - Removed remaining_ms, remaining_override, setRemainingOverride
+ * Only time tracking: start/stop, manual entry, per-person breakdown.
+ * Estimates are managed in a separate popup (EstimateCardApp).
  */
-
 export default function TimerApp({ t }) {
   const [timeData, setTimeData] = useState({});
   const [memberId, setMemberId] = useState(null);
@@ -43,14 +34,9 @@ export default function TimerApp({ t }) {
   const [boardMembers, setBoardMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [estimates, setEstimates] = useState({});
-  const [estimateInput, setEstimateInput] = useState("");
-  const [estimateExpanded, setEstimateExpanded] = useState(false);
-  const [savingEstimate, setSavingEstimate] = useState(false);
   const tickRef = useRef(null);
   const pollRef = useRef(null);
 
-  // Toggle a member in the multi-select
   const toggleMember = useCallback((id) => {
     setSelectedMembers((prev) => {
       if (prev.includes(id)) {
@@ -60,7 +46,6 @@ export default function TimerApp({ t }) {
     });
   }, []);
 
-  // Fetch fresh data from Supabase
   const refreshData = useCallback(async () => {
     try {
       const data = await getCardTimeData(t);
@@ -73,30 +58,19 @@ export default function TimerApp({ t }) {
     }
   }, [t]);
 
-  const refreshEstimates = useCallback(async () => {
-    try {
-      const data = await getCardEstimates(t);
-      setEstimates(data);
-    } catch (e) {
-      console.error("[TimeTracker] refreshEstimates error:", e);
-    }
-  }, [t]);
-
   const touchBadges = useCallback(async () => {
     try {
       await t.set("card", "shared", "lastUpdate", Date.now());
     } catch (e) {
-      // ignore – best effort
+      // ignore
     }
   }, [t]);
 
-  // Load data on mount
   useEffect(() => {
     async function init() {
       const member = await t.member("id", "fullName");
       setMemberId(member.id);
       setMemberName(member.fullName);
-      // Fetch board members for the multi-select
       let members = [];
       try {
         const board = await t.board("members");
@@ -106,10 +80,7 @@ export default function TimerApp({ t }) {
         console.warn("[TimeTracker] Could not fetch board members:", e);
       }
       const data = await refreshData();
-      await refreshEstimates();
-      await touchBadges();
 
-      // Pre-select members that have active timers on this card
       const activeIds = Object.keys(data).filter(
         (id) => data[id]?.activeStart != null,
       );
@@ -122,9 +93,8 @@ export default function TimerApp({ t }) {
       setLoading(false);
     }
     init();
-  }, [t, refreshData, refreshEstimates]);
+  }, [t, refreshData]);
 
-  // Tick for active timers
   useEffect(() => {
     const hasActive = Object.values(timeData).some(
       (d) => d.activeStart != null,
@@ -137,7 +107,6 @@ export default function TimerApp({ t }) {
     return () => clearInterval(tickRef.current);
   }, [timeData]);
 
-  // Poll every 5s
   useEffect(() => {
     const POLL_INTERVAL = 5000;
     const startPolling = () => {
@@ -145,14 +114,12 @@ export default function TimerApp({ t }) {
       pollRef.current = setInterval(() => {
         if (document.visibilityState === "visible") {
           refreshData();
-          refreshEstimates();
         }
       }, POLL_INTERVAL);
     };
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
         refreshData();
-        refreshEstimates();
         startPolling();
       } else {
         clearInterval(pollRef.current);
@@ -164,26 +131,23 @@ export default function TimerApp({ t }) {
       clearInterval(pollRef.current);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [refreshData, refreshEstimates]);
+  }, [refreshData]);
 
-  // Current user's display total
   const displayTotal = useMemo(() => {
     if (!memberId || !timeData[memberId]) return 0;
     return getTotalWithActive(timeData[memberId]);
   }, [memberId, timeData, now]);
 
-  // Resolve selected members to target objects
   const getTargetMembers = useCallback(() => {
     return selectedMembers
       .map((id) => {
-        if (id === "self") return null; // null = current user
+        if (id === "self") return null;
         const bm = boardMembers.find((m) => m.id === id);
         return bm ? { id: bm.id, fullName: bm.fullName } : null;
       })
       .filter((m) => m !== undefined);
   }, [selectedMembers, boardMembers]);
 
-  // Check if ALL selected members have active timers
   const allSelectedRunning =
     selectedMembers.length > 0 &&
     selectedMembers.every((id) => {
@@ -191,7 +155,6 @@ export default function TimerApp({ t }) {
       return timeData[mId]?.activeStart != null;
     });
 
-  // Check if ANY selected member has an active timer
   const anySelectedRunning = selectedMembers.some((id) => {
     const mId = id === "self" ? memberId : id;
     return timeData[mId]?.activeStart != null;
@@ -228,6 +191,7 @@ export default function TimerApp({ t }) {
     memberId,
     timeData,
     refreshData,
+    touchBadges,
   ]);
 
   const handleManualAdd = useCallback(async () => {
@@ -243,7 +207,7 @@ export default function TimerApp({ t }) {
       setManualInput("");
       setSaving(false);
     }
-  }, [t, manualInput, manualDate, getTargetMembers, refreshData]);
+  }, [t, manualInput, manualDate, getTargetMembers, refreshData, touchBadges]);
 
   const handleManualSubtract = useCallback(async () => {
     const ms = parseDuration(manualInput);
@@ -258,60 +222,7 @@ export default function TimerApp({ t }) {
       setManualInput("");
       setSaving(false);
     }
-  }, [t, manualInput, manualDate, getTargetMembers, refreshData]);
-
-  const handleSetEstimate = useCallback(
-    async (input) => {
-      const ms = parseDuration(input);
-      if (!ms || ms <= 0) return;
-
-      setSavingEstimate(true);
-      try {
-        const targets =
-          selectedMembers.includes("self") && selectedMembers.length === 1
-            ? [null]
-            : selectedMembers
-                .map((id) => {
-                  if (id === "self")
-                    return { id: memberId, fullName: memberName };
-                  const bm = boardMembers.find((m) => m.id === id);
-                  return bm ? { id: bm.id, fullName: bm.fullName } : null;
-                })
-                .filter(Boolean);
-
-        for (const target of targets) {
-          await setEstimate(t, ms, target);
-        }
-
-        setEstimateInput("");
-        await refreshEstimates();
-        await touchBadges();
-      } catch (e) {
-        console.error("[TimeTracker] handleSetEstimate error:", e);
-      } finally {
-        setSavingEstimate(false);
-      }
-    },
-    [t, selectedMembers, memberId, memberName, boardMembers, refreshEstimates],
-  );
-
-  const handleRemoveEstimate = useCallback(
-    async (targetMemberId) => {
-      setSavingEstimate(true);
-      try {
-        const target =
-          targetMemberId === memberId ? null : { id: targetMemberId };
-        await removeEstimate(t, target);
-        await refreshEstimates();
-        await touchBadges();
-      } catch (e) {
-        console.error("[TimeTracker] handleRemoveEstimate error:", e);
-      } finally {
-        setSavingEstimate(false);
-      }
-    },
-    [t, memberId, refreshEstimates],
-  );
+  }, [t, manualInput, manualDate, getTargetMembers, refreshData, touchBadges]);
 
   if (loading) {
     return <div style={styles.center}>Laster...</div>;
@@ -328,7 +239,6 @@ export default function TimerApp({ t }) {
 
   const grandTotal = members.reduce((s, m) => s + m.total, 0);
 
-  // Button label logic
   const getToggleLabel = () => {
     if (saving) return "...";
     if (selectedMembers.length === 0) return "▶ Start";
@@ -487,199 +397,6 @@ export default function TimerApp({ t }) {
           </table>
         </div>
       )}
-
-      {/* Estimates */}
-      <div style={styles.section}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            cursor: "pointer",
-          }}
-          onClick={() => setEstimateExpanded(!estimateExpanded)}
-        >
-          <span style={styles.sectionTitle}>
-            Tidsestimat{" "}
-            {Object.keys(estimates).length > 0
-              ? `(${Object.keys(estimates).length})`
-              : ""}
-          </span>
-          <span style={{ fontSize: 12, color: "#5E6C84" }}>
-            {estimateExpanded ? "▲" : "▼"}
-          </span>
-        </div>
-
-        {estimateExpanded && (
-          <div style={{ marginTop: 8 }}>
-            <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-              <input
-                type="text"
-                placeholder="f.eks. 2t 30m"
-                value={estimateInput}
-                onChange={(e) => setEstimateInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSetEstimate(estimateInput);
-                }}
-                style={{
-                  flex: 1,
-                  padding: "5px 8px",
-                  border: "1px solid #DFE1E6",
-                  borderRadius: 4,
-                  fontSize: 13,
-                }}
-                disabled={savingEstimate}
-              />
-              <button
-                onClick={() => handleSetEstimate(estimateInput)}
-                disabled={savingEstimate || !estimateInput.trim()}
-                style={{
-                  ...styles.smallBtn,
-                  backgroundColor: "#0079BF",
-                  opacity: savingEstimate || !estimateInput.trim() ? 0.5 : 1,
-                }}
-                title="Sett estimat"
-              >
-                ✓
-              </button>
-            </div>
-
-            <div style={{ fontSize: 11, color: "#8993A4", marginBottom: 8 }}>
-              Settes for valgte person(er) over.
-            </div>
-
-            {Object.keys(estimates).length > 0 && (
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th style={{ ...styles.th, fontSize: 10 }}>Person</th>
-                    <th
-                      style={{
-                        ...styles.th,
-                        fontSize: 10,
-                        textAlign: "right",
-                      }}
-                    >
-                      Estimat
-                    </th>
-                    <th
-                      style={{
-                        ...styles.th,
-                        fontSize: 10,
-                        textAlign: "right",
-                      }}
-                    >
-                      Faktisk
-                    </th>
-                    <th
-                      style={{
-                        ...styles.th,
-                        fontSize: 10,
-                        textAlign: "right",
-                      }}
-                    >
-                      Gjenstående
-                    </th>
-                    <th style={{ ...styles.th, fontSize: 10, width: 30 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(estimates).map(([mId, est]) => {
-                    const actual = timeData[mId]
-                      ? getTotalWithActive(timeData[mId])
-                      : 0;
-                    const remaining = Math.max(0, est.estimatedMs - actual);
-                    const isOver = actual > est.estimatedMs;
-                    const hasOriginal =
-                      est.originalMs !== null &&
-                      est.originalMs !== est.estimatedMs;
-                    return (
-                      <tr key={mId}>
-                        <td style={{ ...styles.td, fontSize: 12 }}>
-                          {est.name || mId}
-                          {mId === memberId ? " (deg)" : ""}
-                        </td>
-                        <td
-                          style={{
-                            ...styles.td,
-                            fontSize: 12,
-                            textAlign: "right",
-                            fontWeight: 600,
-                            fontFamily: "monospace",
-                          }}
-                        >
-                          {formatDuration(est.estimatedMs, true)}
-                          {hasOriginal && (
-                            <span
-                              style={{
-                                fontWeight: 400,
-                                fontSize: 10,
-                                color: "#8993A4",
-                                marginLeft: 4,
-                              }}
-                              title={`Opprinnelig estimat: ${formatDuration(est.originalMs, true)}`}
-                            >
-                              (oppr. {formatDuration(est.originalMs, true)})
-                            </span>
-                          )}
-                        </td>
-                        <td
-                          style={{
-                            ...styles.td,
-                            fontSize: 12,
-                            textAlign: "right",
-                            fontFamily: "monospace",
-                            color: isOver ? "#EB5A46" : "#172B4D",
-                          }}
-                        >
-                          {formatDuration(actual, true)}
-                        </td>
-                        <td
-                          style={{
-                            ...styles.td,
-                            fontSize: 12,
-                            textAlign: "right",
-                            fontFamily: "monospace",
-                            color:
-                              remaining === 0 && actual > 0
-                                ? "#EB5A46"
-                                : "#5E6C84",
-                          }}
-                        >
-                          {formatDuration(remaining, true)}
-                        </td>
-                        <td
-                          style={{
-                            ...styles.td,
-                            textAlign: "center",
-                            padding: "2px",
-                          }}
-                        >
-                          <button
-                            onClick={() => handleRemoveEstimate(mId)}
-                            disabled={savingEstimate}
-                            style={{
-                              border: "none",
-                              background: "none",
-                              cursor: "pointer",
-                              fontSize: 12,
-                              color: "#B04632",
-                              padding: "2px 4px",
-                            }}
-                            title="Fjern estimat"
-                          >
-                            ✕
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -780,7 +497,6 @@ const styles = {
     flexDirection: "column",
     gap: 0,
     marginTop: 4,
-    padding: "0",
   },
   memberCheckbox: {
     display: "flex",
@@ -789,7 +505,6 @@ const styles = {
     fontSize: 13,
     color: "#172B4D",
     cursor: "pointer",
-    margin: 0,
     padding: "2px 0",
     minHeight: 24,
   },

@@ -243,7 +243,7 @@ if (!window.TrelloPowerUp) {
                   callback: function (tc) {
                     return tc.popup({
                       title: "Tidstracker",
-                      url: BASE + "/timer.html",
+                      url: BASE + "/estimate-card.html",
                       height: 400,
                     });
                   },
@@ -269,6 +269,17 @@ if (!window.TrelloPowerUp) {
                 title: "Tidstracker",
                 url: BASE + "/timer.html",
                 height: 460,
+              });
+            },
+          },
+          {
+            icon: BASE + "/clock-icon.svg",
+            text: "Tidsestimat",
+            callback: function (tc) {
+              return tc.popup({
+                title: "Tidsestimat",
+                url: BASE + "/estimate-card.html",
+                height: 400,
               });
             },
           },
