@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import {
   getCardTimeData,
   startTimer,
@@ -6,24 +12,30 @@ import {
   adjustTime,
 } from "../utils/storage.js";
 import {
-  formatTimer,
-  formatDuration,
-  getTotalWithActive,
-  parseDuration,
-} from "../utils/time.js";
-import {
   getCardEstimates,
   setEstimate,
   removeEstimate,
 } from "../utils/estimateStorage.js";
+import {
+  formatDuration,
+  formatTimer,
+  parseDuration,
+  getTotalWithActive,
+} from "../utils/time.js";
 
 /**
- * TimerApp – The popup shown when a user clicks "Tidstracker" on a card.
+ * TimerApp – Card-level timer popup.
+ *
+ * Changes:
+ * - Estimate column shows "2t (oppr. 4t)" when estimate was re-estimated
+ * - Gjenstående column: always auto-calculated (estimat − faktisk)
+ * - Removed remaining_ms, remaining_override, setRemainingOverride
  */
+
 export default function TimerApp({ t }) {
   const [timeData, setTimeData] = useState({});
   const [memberId, setMemberId] = useState(null);
-  const [memberName, setMemberName] = useState(""); // reserved for future use
+  const [memberName, setMemberName] = useState("");
   const [now, setNow] = useState(Date.now());
   const [manualInput, setManualInput] = useState("");
   const [manualDate, setManualDate] = useState("");
@@ -70,6 +82,14 @@ export default function TimerApp({ t }) {
     }
   }, [t]);
 
+  const touchBadges = useCallback(async () => {
+    try {
+      await t.set("card", "shared", "lastUpdate", Date.now());
+    } catch (e) {
+      // ignore – best effort
+    }
+  }, [t]);
+
   // Load data on mount
   useEffect(() => {
     async function init() {
@@ -87,6 +107,7 @@ export default function TimerApp({ t }) {
       }
       const data = await refreshData();
       await refreshEstimates();
+      await touchBadges();
 
       // Pre-select members that have active timers on this card
       const activeIds = Object.keys(data).filter(
@@ -96,23 +117,19 @@ export default function TimerApp({ t }) {
         const selected = activeIds.map((id) =>
           id === member.id ? "self" : id,
         );
-        // Ensure "self" is included if current user has an active timer
         setSelectedMembers(selected);
       }
-      // else: keep default ["self"]
-
       setLoading(false);
     }
     init();
-  }, [t, refreshData]);
+  }, [t, refreshData, refreshEstimates]);
 
-  // Tick every second when any member has an active timer
+  // Tick for active timers
   useEffect(() => {
-    const hasActiveTimer = Object.values(timeData).some(
+    const hasActive = Object.values(timeData).some(
       (d) => d.activeStart != null,
     );
-
-    if (hasActiveTimer) {
+    if (hasActive) {
       tickRef.current = setInterval(() => setNow(Date.now()), 1000);
     } else {
       clearInterval(tickRef.current);
@@ -120,54 +137,50 @@ export default function TimerApp({ t }) {
     return () => clearInterval(tickRef.current);
   }, [timeData]);
 
-  // Poll Supabase every 5s to detect changes from other users
+  // Poll every 5s
   useEffect(() => {
     const POLL_INTERVAL = 5000;
-
     const startPolling = () => {
       clearInterval(pollRef.current);
       pollRef.current = setInterval(() => {
         if (document.visibilityState === "visible") {
           refreshData();
+          refreshEstimates();
         }
       }, POLL_INTERVAL);
     };
-
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        refreshData(); // Refresh immediately when tab becomes visible
+        refreshData();
+        refreshEstimates();
         startPolling();
       } else {
         clearInterval(pollRef.current);
       }
     };
-
     startPolling();
     document.addEventListener("visibilitychange", handleVisibility);
-
     return () => {
       clearInterval(pollRef.current);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [refreshData]);
+  }, [refreshData, refreshEstimates]);
 
-  // Derived state for current user
-  const myData = memberId ? timeData[memberId] : null;
-  const myTotal = myData ? getTotalWithActive(myData) : 0;
-  const isRunning = myData?.activeStart != null;
-  const displayTotal = isRunning
-    ? (myData.totalMs || 0) + (now - myData.activeStart)
-    : myTotal;
+  // Current user's display total
+  const displayTotal = useMemo(() => {
+    if (!memberId || !timeData[memberId]) return 0;
+    return getTotalWithActive(timeData[memberId]);
+  }, [memberId, timeData, now]);
 
-  // Get target members from checkbox selection (returns array of { id, fullName } or undefined for self)
+  // Resolve selected members to target objects
   const getTargetMembers = useCallback(() => {
     return selectedMembers
       .map((id) => {
-        if (id === "self") return undefined; // undefined = current user
-        const m = boardMembers.find((bm) => bm.id === id);
-        return m ? { id: m.id, fullName: m.fullName } : null;
+        if (id === "self") return null; // null = current user
+        const bm = boardMembers.find((m) => m.id === id);
+        return bm ? { id: bm.id, fullName: bm.fullName } : null;
       })
-      .filter((m) => m !== null);
+      .filter((m) => m !== undefined);
   }, [selectedMembers, boardMembers]);
 
   // Check if ALL selected members have active timers
@@ -190,12 +203,10 @@ export default function TimerApp({ t }) {
     try {
       const targets = getTargetMembers();
       if (allSelectedRunning) {
-        // All are running — stop all selected
         for (const target of targets) {
           await stopTimer(t, target);
         }
       } else {
-        // Start those that aren't running yet
         for (const target of targets) {
           const mId = target ? target.id : memberId;
           if (!timeData[mId]?.activeStart) {
@@ -204,6 +215,7 @@ export default function TimerApp({ t }) {
         }
       }
       await refreshData();
+      await touchBadges();
     } catch (e) {
       console.error("[TimeTracker] toggle error:", e);
     }
@@ -227,6 +239,7 @@ export default function TimerApp({ t }) {
         await adjustTime(t, ms, manualDate || undefined, target);
       }
       await refreshData();
+      await touchBadges();
       setManualInput("");
       setSaving(false);
     }
@@ -241,6 +254,7 @@ export default function TimerApp({ t }) {
         await adjustTime(t, -ms, manualDate || undefined, target);
       }
       await refreshData();
+      await touchBadges();
       setManualInput("");
       setSaving(false);
     }
@@ -430,90 +444,61 @@ export default function TimerApp({ t }) {
             <thead>
               <tr>
                 <th style={styles.th}>Person</th>
-                <th style={{ ...styles.th, textAlign: "right", width: 120 }}>
-                  Tid
-                </th>
-                <th style={{ ...styles.th, textAlign: "center", width: 40 }}>
-                  Status
-                </th>
+                <th style={{ ...styles.th, textAlign: "right" }}>Tid</th>
               </tr>
             </thead>
             <tbody>
               {members.map((m) => (
                 <tr key={m.id}>
-                  <td style={styles.td}>{m.name}</td>
+                  <td style={styles.td}>
+                    {m.name}
+                    {m.id === memberId ? " (deg)" : ""}
+                    {m.active ? " 🟢" : ""}
+                  </td>
                   <td
                     style={{
                       ...styles.td,
                       textAlign: "right",
-                      fontVariantNumeric: "tabular-nums",
-                      fontFamily: "monospace, sans-serif",
-                      whiteSpace: "nowrap",
-                      width: 120,
+                      fontFamily: "monospace",
                     }}
                   >
                     {formatDuration(m.total)}
                   </td>
-                  <td style={{ ...styles.td, textAlign: "center" }}>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        width: 10,
-                        height: 10,
-                        borderRadius: "50%",
-                        backgroundColor: m.active ? "#61BD4F" : "#D3D3D3",
-                      }}
-                      title={m.active ? "Timer kjører" : "Inaktiv"}
-                    />
-                  </td>
                 </tr>
               ))}
+              {members.length > 1 && (
+                <tr>
+                  <td style={{ ...styles.td, fontWeight: 600 }}>Totalt</td>
+                  <td
+                    style={{
+                      ...styles.td,
+                      textAlign: "right",
+                      fontFamily: "monospace",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {formatDuration(grandTotal)}
+                  </td>
+                </tr>
+              )}
             </tbody>
-            <tfoot>
-              <tr style={{ borderBottom: "1px solid #DFE1E6" }}>
-                <td
-                  style={{
-                    ...styles.td,
-                    borderBottom: "none",
-                    fontWeight: 600,
-                  }}
-                >
-                  Totalt
-                </td>
-                <td
-                  style={{
-                    ...styles.td,
-                    borderBottom: "none",
-                    textAlign: "right",
-                    fontWeight: 600,
-                    fontVariantNumeric: "tabular-nums",
-                    fontFamily: "monospace, sans-serif",
-                    whiteSpace: "nowrap",
-                    width: 120,
-                  }}
-                >
-                  {formatDuration(grandTotal)}
-                </td>
-                <td style={{ ...styles.td, borderBottom: "none" }} />
-              </tr>
-            </tfoot>
           </table>
         </div>
       )}
 
-      {/* ── Estimat-seksjon ─────────────────────────────────── */}
+      {/* Estimates */}
       <div style={styles.section}>
         <div
           style={{
             display: "flex",
-            alignItems: "center",
             justifyContent: "space-between",
+            alignItems: "center",
             cursor: "pointer",
           }}
           onClick={() => setEstimateExpanded(!estimateExpanded)}
         >
           <span style={styles.sectionTitle}>
-            Estimat{" "}
+            Tidsestimat{" "}
             {Object.keys(estimates).length > 0
               ? `(${Object.keys(estimates).length})`
               : ""}
@@ -584,6 +569,15 @@ export default function TimerApp({ t }) {
                     >
                       Faktisk
                     </th>
+                    <th
+                      style={{
+                        ...styles.th,
+                        fontSize: 10,
+                        textAlign: "right",
+                      }}
+                    >
+                      Gjenstående
+                    </th>
                     <th style={{ ...styles.th, fontSize: 10, width: 30 }}></th>
                   </tr>
                 </thead>
@@ -592,7 +586,11 @@ export default function TimerApp({ t }) {
                     const actual = timeData[mId]
                       ? getTotalWithActive(timeData[mId])
                       : 0;
+                    const remaining = Math.max(0, est.estimatedMs - actual);
                     const isOver = actual > est.estimatedMs;
+                    const hasOriginal =
+                      est.originalMs !== null &&
+                      est.originalMs !== est.estimatedMs;
                     return (
                       <tr key={mId}>
                         <td style={{ ...styles.td, fontSize: 12 }}>
@@ -609,6 +607,19 @@ export default function TimerApp({ t }) {
                           }}
                         >
                           {formatDuration(est.estimatedMs, true)}
+                          {hasOriginal && (
+                            <span
+                              style={{
+                                fontWeight: 400,
+                                fontSize: 10,
+                                color: "#8993A4",
+                                marginLeft: 4,
+                              }}
+                              title={`Opprinnelig estimat: ${formatDuration(est.originalMs, true)}`}
+                            >
+                              (oppr. {formatDuration(est.originalMs, true)})
+                            </span>
+                          )}
                         </td>
                         <td
                           style={{
@@ -620,6 +631,20 @@ export default function TimerApp({ t }) {
                           }}
                         >
                           {formatDuration(actual, true)}
+                        </td>
+                        <td
+                          style={{
+                            ...styles.td,
+                            fontSize: 12,
+                            textAlign: "right",
+                            fontFamily: "monospace",
+                            color:
+                              remaining === 0 && actual > 0
+                                ? "#EB5A46"
+                                : "#5E6C84",
+                          }}
+                        >
+                          {formatDuration(remaining, true)}
                         </td>
                         <td
                           style={{
@@ -697,8 +722,14 @@ const styles = {
     fontSize: 13,
     color: "#172B4D",
   },
+  input: {
+    flex: 1,
+    padding: "5px 8px",
+    border: "1px solid #DFE1E6",
+    borderRadius: 4,
+    fontSize: 13,
+  },
   label: { fontSize: 12, color: "#5E6C84" },
-
   smallBtn: {
     width: 40,
     height: 32,
@@ -716,7 +747,6 @@ const styles = {
     boxSizing: "border-box",
     marginLeft: 6,
   },
-
   smallBtnRed: {
     width: 40,
     height: 32,
