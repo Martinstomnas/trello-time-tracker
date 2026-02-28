@@ -1,9 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-} from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { getCardTimeData } from "../utils/storage.js";
 import {
   getCardEstimates,
@@ -282,8 +277,7 @@ export default function EstimateCardApp({ t }) {
               const remaining = Math.max(0, est.estimatedMs - actual);
               const isOver = actual > est.estimatedMs;
               const hasOriginal =
-                est.originalMs !== null &&
-                est.originalMs !== est.estimatedMs;
+                est.originalMs !== null && est.originalMs !== est.estimatedMs;
               return (
                 <tr key={mId}>
                   <td style={styles.td}>
@@ -394,6 +388,7 @@ const styles = {
     flexDirection: "column",
     gap: 0,
     marginTop: 4,
+    padding: "0",
   },
   memberCheckbox: {
     display: "flex",
@@ -403,6 +398,7 @@ const styles = {
     color: "#172B4D",
     cursor: "pointer",
     padding: "2px 0",
+    margin: 0,
     minHeight: 24,
   },
   table: { width: "100%", borderCollapse: "collapse" },
