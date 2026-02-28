@@ -285,6 +285,7 @@ export default function TimerApp({ t }) {
 
         setEstimateInput("");
         await refreshEstimates();
+        await touchBadges();
       } catch (e) {
         console.error("[TimeTracker] handleSetEstimate error:", e);
       } finally {
@@ -302,6 +303,7 @@ export default function TimerApp({ t }) {
           targetMemberId === memberId ? null : { id: targetMemberId };
         await removeEstimate(t, target);
         await refreshEstimates();
+        await touchBadges();
       } catch (e) {
         console.error("[TimeTracker] handleRemoveEstimate error:", e);
       } finally {
