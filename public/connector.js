@@ -170,17 +170,13 @@ if (!window.TrelloPowerUp) {
               var estimateTotal = results[1];
               var total = cardTotalMs(data);
               var active = hasActiveTimer(data);
-              if (total === 0 && !active && !estimateTotal) return [];
 
-              var text;
-              if (estimateTotal > 0) {
-                text =
-                  formatDuration(total, true) +
-                  " / " +
-                  formatDuration(estimateTotal, true);
-              } else {
-                text = formatDuration(total, true);
-              }
+              var text =
+                formatDuration(total, true) +
+                " / " +
+                (estimateTotal > 0
+                  ? formatDuration(estimateTotal, true)
+                  : "Ikke estimert");
 
               var color = null;
               if (active) {
@@ -217,7 +213,6 @@ if (!window.TrelloPowerUp) {
               var estimateTotal = results[1];
               var total = cardTotalMs(data);
               var active = hasActiveTimer(data);
-              if (total === 0 && !active && !estimateTotal) return [];
 
               var badges = [
                 {
@@ -234,21 +229,22 @@ if (!window.TrelloPowerUp) {
                 },
               ];
 
-              if (estimateTotal > 0) {
-                var isOver = total > estimateTotal;
-                badges.push({
-                  title: "Estimert tid",
-                  text: formatDuration(estimateTotal, false),
-                  color: isOver ? "red" : "blue",
-                  callback: function (tc) {
-                    return tc.popup({
-                      title: "Tidstracker",
-                      url: BASE + "/estimate-card.html",
-                      height: 400,
-                    });
-                  },
-                });
-              }
+              var isOver = estimateTotal > 0 && total > estimateTotal;
+              badges.push({
+                title: "Estimert tid",
+                text:
+                  estimateTotal > 0
+                    ? formatDuration(estimateTotal, false)
+                    : "Ikke estimert",
+                color: isOver ? "red" : null,
+                callback: function (tc) {
+                  return tc.popup({
+                    title: "Tidsestimat",
+                    url: BASE + "/estimate-card.html",
+                    height: 400,
+                  });
+                },
+              });
 
               return badges;
             });
