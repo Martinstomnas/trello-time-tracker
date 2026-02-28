@@ -497,6 +497,7 @@ const styles = {
     flexDirection: "column",
     gap: 0,
     marginTop: 4,
+    padding: "0",
   },
   memberCheckbox: {
     display: "flex",
@@ -505,6 +506,7 @@ const styles = {
     fontSize: 13,
     color: "#172B4D",
     cursor: "pointer",
+    margin: 0,
     padding: "2px 0",
     minHeight: 24,
   },
