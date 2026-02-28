@@ -3,19 +3,25 @@
  *
  * DATA MODEL
  * ----------
- * Two new tables in Supabase:
+ * Two tables in Supabase:
  *
  * time_estimates: One row per member per card
  *   - board_id, card_id, member_id, member_name
- *   - estimated_ms, remaining_ms, remaining_override
+ *   - estimated_ms
  *   - created_at, updated_at
  *
  * estimate_history: Log of re-estimations (scope changes)
  *   - estimate_id (FK), board_id, card_id, member_id, member_name
  *   - previous_ms, new_ms, reason, changed_at
+ *
+ * GRACE PERIOD: If estimate is changed within 2 minutes of last update,
+ * it's treated as a correction (overwrite, no history log).
  */
 
 import { supabase } from "./supabase.js";
+
+// Grace period in milliseconds (2 minutes)
+const GRACE_PERIOD_MS = 2 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // Card-level estimate operations
@@ -23,8 +29,10 @@ import { supabase } from "./supabase.js";
 
 /**
  * Get all estimates for a specific card, grouped by member.
+ * Includes original estimate (first previous_ms from history) when available.
+ *
  * @param {object} t – Trello Power-Up iframe context
- * @returns {Object} { [memberId]: { name, estimatedMs, remainingMs, remainingOverride, updatedAt } }
+ * @returns {Object} { [memberId]: { name, estimatedMs, originalMs, updatedAt } }
  */
 export async function getCardEstimates(t) {
   const card = await t.card("id");
@@ -32,9 +40,7 @@ export async function getCardEstimates(t) {
 
   const { data: estimates, error } = await supabase
     .from("time_estimates")
-    .select(
-      "member_id, member_name, estimated_ms, remaining_ms, remaining_override, updated_at",
-    )
+    .select("id, member_id, member_name, estimated_ms, updated_at")
     .eq("card_id", card.id);
 
   if (error) {
@@ -42,12 +48,30 @@ export async function getCardEstimates(t) {
     return result;
   }
 
-  for (const est of estimates || []) {
+  if (!estimates || estimates.length === 0) return result;
+
+  // Fetch history for all estimates on this card to find original values
+  const estimateIds = estimates.map((e) => e.id);
+  const { data: history } = await supabase
+    .from("estimate_history")
+    .select("estimate_id, previous_ms, changed_at")
+    .in("estimate_id", estimateIds)
+    .order("changed_at", { ascending: true });
+
+  // Build a map of estimate_id → first previous_ms (= original estimate)
+  const originalMap = {};
+  for (const h of history || []) {
+    if (!originalMap[h.estimate_id]) {
+      originalMap[h.estimate_id] = h.previous_ms;
+    }
+  }
+
+  for (const est of estimates) {
+    const originalMs = originalMap[est.id] ?? null;
     result[est.member_id] = {
       name: est.member_name,
       estimatedMs: est.estimated_ms,
-      remainingMs: est.remaining_ms,
-      remainingOverride: est.remaining_override,
+      originalMs, // null if never re-estimated
       updatedAt: est.updated_at,
     };
   }
@@ -57,7 +81,9 @@ export async function getCardEstimates(t) {
 
 /**
  * Set or update estimate for a member on a card.
- * If estimate already exists and value changes, logs to estimate_history.
+ * If estimate already exists and value changes:
+ *   - Within grace period (2 min): overwrite without logging history
+ *   - Outside grace period: log to estimate_history, then update
  *
  * @param {object} t – Trello Power-Up iframe context
  * @param {number} estimatedMs – Estimated time in milliseconds
@@ -72,24 +98,33 @@ export async function setEstimate(t, estimatedMs, targetMember, reason) {
   // Check if estimate already exists
   const { data: existing } = await supabase
     .from("time_estimates")
-    .select("id, estimated_ms")
+    .select("id, estimated_ms, updated_at")
     .eq("card_id", card.id)
     .eq("member_id", member.id)
     .maybeSingle();
 
   if (existing) {
-    // Log the change if value is different
+    // Only act if value actually changed
     if (existing.estimated_ms !== estimatedMs) {
-      await supabase.from("estimate_history").insert({
-        estimate_id: existing.id,
-        board_id: board.id,
-        card_id: card.id,
-        member_id: member.id,
-        member_name: member.fullName,
-        previous_ms: existing.estimated_ms,
-        new_ms: estimatedMs,
-        reason: reason || null,
-      });
+      // Check grace period: if updated_at is within 2 minutes, skip history
+      const lastUpdate = new Date(existing.updated_at).getTime();
+      const now = Date.now();
+      const withinGrace = now - lastUpdate < GRACE_PERIOD_MS;
+
+      if (!withinGrace) {
+        // Log the change to history
+        await supabase.from("estimate_history").insert({
+          estimate_id: existing.id,
+          board_id: board.id,
+          card_id: card.id,
+          member_id: member.id,
+          member_name: member.fullName,
+          previous_ms: existing.estimated_ms,
+          new_ms: estimatedMs,
+          reason: reason || null,
+        });
+      }
+      // else: within grace period – just overwrite, no history entry
     }
 
     // Update existing estimate
@@ -135,38 +170,6 @@ export async function removeEstimate(t, targetMember) {
   if (error) console.error("[TimeTracker] removeEstimate error:", error);
 }
 
-/**
- * Set remaining time override for a member on a card.
- * @param {object} t – Trello Power-Up iframe context
- * @param {number|null} remainingMs – Remaining time in ms, or null to reset to auto-calculated
- * @param {{ id: string }} [targetMember] – Defaults to current user
- */
-export async function setRemainingOverride(t, remainingMs, targetMember) {
-  const member = targetMember || (await t.member("id"));
-  const card = await t.card("id");
-
-  const update =
-    remainingMs !== null
-      ? {
-          remaining_ms: remainingMs,
-          remaining_override: true,
-          updated_at: new Date().toISOString(),
-        }
-      : {
-          remaining_ms: null,
-          remaining_override: false,
-          updated_at: new Date().toISOString(),
-        };
-
-  const { error } = await supabase
-    .from("time_estimates")
-    .update(update)
-    .eq("card_id", card.id)
-    .eq("member_id", member.id);
-
-  if (error) console.error("[TimeTracker] setRemainingOverride error:", error);
-}
-
 // ---------------------------------------------------------------------------
 // Board-level estimate report
 // ---------------------------------------------------------------------------
@@ -174,6 +177,7 @@ export async function setRemainingOverride(t, remainingMs, targetMember) {
 /**
  * Fetch estimation report for the entire board.
  * Combines estimates with actual time data for comparison.
+ * Gjenstående is always auto-calculated (estimated − actual).
  *
  * @param {object} t – Trello Power-Up iframe context
  * @param {object} [filters] – { from, to } date filters for actual time
@@ -200,12 +204,27 @@ export async function getBoardEstimateReport(t, filters = {}) {
   // 1. Fetch all estimates for this board
   const { data: estimates, error: estError } = await supabase
     .from("time_estimates")
-    .select(
-      "card_id, member_id, member_name, estimated_ms, remaining_ms, remaining_override",
-    )
+    .select("id, card_id, member_id, member_name, estimated_ms")
     .eq("board_id", board.id);
 
   if (estError) throw estError;
+
+  // 1b. Fetch original estimates from history
+  const estimateIds = (estimates || []).map((e) => e.id);
+  let originalMap = {};
+  if (estimateIds.length > 0) {
+    const { data: history } = await supabase
+      .from("estimate_history")
+      .select("estimate_id, previous_ms, changed_at")
+      .in("estimate_id", estimateIds)
+      .order("changed_at", { ascending: true });
+
+    for (const h of history || []) {
+      if (!originalMap[h.estimate_id]) {
+        originalMap[h.estimate_id] = h.previous_ms;
+      }
+    }
+  }
 
   // 2. Fetch actual time entries (with optional date filter)
   let query = supabase
@@ -237,7 +256,7 @@ export async function getBoardEstimateReport(t, filters = {}) {
         cardName: live?.name || cardId,
         listName: live?.listName || "",
         labels: live?.labels || [],
-        members: {}, // { [memberId]: { name, estimatedMs, actualMs, remainingMs, remainingOverride, activeStart } }
+        members: {},
       });
     }
     return cardMap.get(cardId);
@@ -248,9 +267,8 @@ export async function getBoardEstimateReport(t, filters = {}) {
       card.members[memberId] = {
         name: memberName || memberId,
         estimatedMs: 0,
+        originalMs: null,
         actualMs: 0,
-        remainingMs: null,
-        remainingOverride: false,
         activeStart: null,
       };
     }
@@ -262,8 +280,7 @@ export async function getBoardEstimateReport(t, filters = {}) {
     const card = getOrCreateCard(est.card_id);
     const member = getOrCreateMember(card, est.member_id, est.member_name);
     member.estimatedMs = est.estimated_ms;
-    member.remainingMs = est.remaining_ms;
-    member.remainingOverride = est.remaining_override;
+    member.originalMs = originalMap[est.id] ?? null;
   }
 
   // Fill in actual time

@@ -11,11 +11,10 @@ import { formatDuration, getTotalWithActive } from "../utils/time.js";
 /**
  * EstimateApp – Estimation report tab showing estimated vs actual time.
  *
- * Supports:
- * - Grouping by card / person / label
- * - Sorting by name, deviation, or estimated time
- * - Accuracy scoring per person
- * - CSV export with estimate data
+ * Changes:
+ * - Gjenstående is always auto-calculated: estimat − faktisk
+ * - Removed remaining_override / remaining_ms logic
+ * - Shows original estimate when estimate was re-estimated
  */
 
 // ── Date range presets (shared logic with ReportApp) ──────────────
@@ -108,11 +107,8 @@ function getActualMs(member) {
   return total;
 }
 
+/** Gjenstående: always auto-calculated (estimated − actual), min 0 */
 function getRemainingMs(member) {
-  if (member.remainingOverride && member.remainingMs !== null) {
-    return member.remainingMs;
-  }
-  // Auto-calculated: estimated - actual
   const actual = getActualMs(member);
   return Math.max(0, (member.estimatedMs || 0) - actual);
 }
@@ -129,8 +125,6 @@ function deviationPct(estimated, actual) {
 function accuracyScore(estimated, actual) {
   if (!estimated) return null;
   const ratio = actual / estimated;
-  // Score: 100% = perfect, lower = better estimate
-  // Uses absolute deviation so both over and under are penalized
   return Math.max(0, 100 - Math.abs(ratio - 1) * 100);
 }
 
@@ -148,9 +142,9 @@ function formatPct(pct) {
 
 function deviationColor(pct) {
   if (pct === null || pct === undefined) return "#5E6C84";
-  if (Math.abs(pct) <= 10) return "#61BD4F"; // green – within 10%
-  if (Math.abs(pct) <= 25) return "#F2D600"; // yellow – within 25%
-  return "#EB5A46"; // red – over 25%
+  if (Math.abs(pct) <= 10) return "#61BD4F";
+  if (Math.abs(pct) <= 25) return "#F2D600";
+  return "#EB5A46";
 }
 
 // ── CSV export ───────────────────────────────────────────────────
@@ -166,8 +160,11 @@ function downloadEstimateCSV(aggregated, groupBy) {
     ...(groupBy === "card" ? ["Liste"] : []),
     "Estimert",
     "Estimert (ms)",
+    "Opprinnelig estimert",
+    "Opprinnelig (ms)",
     "Faktisk",
     "Faktisk (ms)",
+    "Gjenstående",
     "Avvik",
     "Avvik %",
     "Accuracy",
@@ -181,8 +178,11 @@ function downloadEstimateCSV(aggregated, groupBy) {
         ...(groupBy === "card" ? [_esc(row.listName || "")] : []),
         _esc(formatDuration(row.estimatedMs)),
         row.estimatedMs,
+        _esc(row.originalMs != null ? formatDuration(row.originalMs) : ""),
+        row.originalMs ?? "",
         _esc(formatDuration(row.actualMs)),
         row.actualMs,
+        _esc(formatDuration(row.remainingMs)),
         _esc(formatDeviation(row.deviationMs)),
         formatPct(row.deviationPct),
         row.accuracy !== null ? row.accuracy.toFixed(0) + "%" : "—",
@@ -331,6 +331,7 @@ export default function EstimateApp({ t }) {
         const actual = getActualMs(m);
         const estimated = m.estimatedMs || 0;
         const remaining = getRemainingMs(m);
+        const originalMs = m.originalMs ?? null;
 
         let key, label, listName;
         if (groupBy === "card") {
@@ -350,6 +351,7 @@ export default function EstimateApp({ t }) {
             const existing = map.get(lKey) || {
               label: lKey,
               estimatedMs: 0,
+              originalMs: null,
               actualMs: 0,
               remainingMs: 0,
               color: lbl.color,
@@ -357,6 +359,10 @@ export default function EstimateApp({ t }) {
             existing.estimatedMs += estimated;
             existing.actualMs += actual;
             existing.remainingMs += remaining;
+            // For label grouping, originalMs aggregation: sum if available
+            if (originalMs != null) {
+              existing.originalMs = (existing.originalMs || 0) + originalMs;
+            }
             map.set(lKey, existing);
           }
           continue;
@@ -367,12 +373,16 @@ export default function EstimateApp({ t }) {
           listName,
           cardId: groupBy === "card" ? card.cardId : undefined,
           estimatedMs: 0,
+          originalMs: null,
           actualMs: 0,
           remainingMs: 0,
         };
         existing.estimatedMs += estimated;
         existing.actualMs += actual;
         existing.remainingMs += remaining;
+        if (originalMs != null) {
+          existing.originalMs = (existing.originalMs || 0) + originalMs;
+        }
         map.set(key, existing);
       }
     }
@@ -405,6 +415,11 @@ export default function EstimateApp({ t }) {
     const totalEstimated = aggregated.reduce((s, r) => s + r.estimatedMs, 0);
     const totalActual = aggregated.reduce((s, r) => s + r.actualMs, 0);
     const totalRemaining = aggregated.reduce((s, r) => s + r.remainingMs, 0);
+    const totalOriginal = aggregated.reduce(
+      (s, r) => s + (r.originalMs || 0),
+      0,
+    );
+    const hasOriginal = aggregated.some((r) => r.originalMs != null);
     const avgAccuracy =
       aggregated.filter((r) => r.accuracy !== null).length > 0
         ? aggregated
@@ -413,7 +428,6 @@ export default function EstimateApp({ t }) {
           aggregated.filter((r) => r.accuracy !== null).length
         : null;
 
-    // Most over- and underestimated
     const withDeviation = aggregated.filter((r) => r.deviationPct !== null);
     const mostOver = withDeviation.length
       ? withDeviation.reduce(
@@ -432,6 +446,7 @@ export default function EstimateApp({ t }) {
       totalEstimated,
       totalActual,
       totalRemaining,
+      totalOriginal: hasOriginal ? totalOriginal : null,
       avgAccuracy,
       mostOver,
       mostUnder,
@@ -448,6 +463,18 @@ export default function EstimateApp({ t }) {
     return <div style={{ ...styles.center, color: "#EB5A46" }}>{error}</div>;
   }
 
+  const datePresets = [
+    { key: "all", label: "Totalt" },
+    { key: "today", label: "I dag" },
+    { key: "yesterday", label: "I går" },
+    { key: "this-week", label: "Denne uken" },
+    { key: "last-week", label: "Forrige uke" },
+    { key: "this-month", label: "Denne mnd" },
+    { key: "last-month", label: "Forrige mnd" },
+    { key: "this-year", label: "I år" },
+    { key: "custom", label: "Egendefinert" },
+  ];
+
   return (
     <div>
       {/* Summary cards */}
@@ -456,6 +483,12 @@ export default function EstimateApp({ t }) {
           <div style={styles.summaryLabel}>Totalt estimert</div>
           <div style={styles.summaryValue}>
             {formatDuration(summary.totalEstimated)}
+            {summary.totalOriginal != null &&
+              summary.totalOriginal !== summary.totalEstimated && (
+                <span style={styles.originalHint}>
+                  (oppr. {formatDuration(summary.totalOriginal)})
+                </span>
+              )}
           </div>
         </div>
         <div style={styles.summaryCard}>
@@ -508,17 +541,7 @@ export default function EstimateApp({ t }) {
       {/* Date filter bar */}
       <div style={styles.dateBar}>
         <div style={styles.datePresets}>
-          {[
-            ["all", "Alt"],
-            ["today", "I dag"],
-            ["yesterday", "I går"],
-            ["this-week", "Denne uken"],
-            ["last-week", "Forrige uke"],
-            ["this-month", "Denne mnd"],
-            ["last-month", "Forrige mnd"],
-            ["this-year", "I år"],
-            ["custom", "Egendefinert"],
-          ].map(([key, label]) => (
+          {datePresets.map(({ key, label }) => (
             <button
               key={key}
               onClick={() => handlePresetChange(key)}
@@ -627,47 +650,66 @@ export default function EstimateApp({ t }) {
             </tr>
           </thead>
           <tbody>
-            {aggregated.map((row, i) => (
-              <tr
-                key={i}
-                style={i % 2 === 0 ? {} : { backgroundColor: "#FAFBFC" }}
-              >
-                <td style={styles.td}>{row.label}</td>
-                {groupBy === "card" && (
-                  <td style={styles.tdSub}>{row.listName}</td>
-                )}
-                <td style={styles.tdTime}>{formatDuration(row.estimatedMs)}</td>
-                <td style={styles.tdTime}>{formatDuration(row.actualMs)}</td>
-                <td style={styles.tdTime}>{formatDuration(row.remainingMs)}</td>
-                <td
-                  style={{
-                    ...styles.tdTime,
-                    color: deviationColor(row.deviationPct),
-                  }}
+            {aggregated.map((row, i) => {
+              const hasOriginal =
+                row.originalMs != null && row.originalMs !== row.estimatedMs;
+              return (
+                <tr
+                  key={i}
+                  style={i % 2 === 0 ? {} : { backgroundColor: "#FAFBFC" }}
                 >
-                  {formatDeviation(row.deviationMs)}
-                </td>
-                <td
-                  style={{
-                    ...styles.tdTime,
-                    color: deviationColor(row.deviationPct),
-                  }}
-                >
-                  {formatPct(row.deviationPct)}
-                </td>
-                <td
-                  style={{
-                    ...styles.tdTime,
-                    color:
-                      row.accuracy !== null
-                        ? deviationColor(100 - row.accuracy)
-                        : "#5E6C84",
-                  }}
-                >
-                  {row.accuracy !== null ? row.accuracy.toFixed(0) + "%" : "—"}
-                </td>
-              </tr>
-            ))}
+                  <td style={styles.td}>{row.label}</td>
+                  {groupBy === "card" && (
+                    <td style={styles.tdSub}>{row.listName}</td>
+                  )}
+                  <td style={styles.tdTime}>
+                    {formatDuration(row.estimatedMs)}
+                    {hasOriginal && (
+                      <span
+                        style={styles.originalHint}
+                        title={`Opprinnelig: ${formatDuration(row.originalMs)}`}
+                      >
+                        {" "}
+                        (oppr. {formatDuration(row.originalMs)})
+                      </span>
+                    )}
+                  </td>
+                  <td style={styles.tdTime}>{formatDuration(row.actualMs)}</td>
+                  <td style={styles.tdTime}>
+                    {formatDuration(row.remainingMs)}
+                  </td>
+                  <td
+                    style={{
+                      ...styles.tdTime,
+                      color: deviationColor(row.deviationPct),
+                    }}
+                  >
+                    {formatDeviation(row.deviationMs)}
+                  </td>
+                  <td
+                    style={{
+                      ...styles.tdTime,
+                      color: deviationColor(row.deviationPct),
+                    }}
+                  >
+                    {formatPct(row.deviationPct)}
+                  </td>
+                  <td
+                    style={{
+                      ...styles.tdTime,
+                      color:
+                        row.accuracy !== null
+                          ? deviationColor(100 - row.accuracy)
+                          : "#5E6C84",
+                    }}
+                  >
+                    {row.accuracy !== null
+                      ? row.accuracy.toFixed(0) + "%"
+                      : "—"}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
           <tfoot>
             <tr style={{ borderTop: "2px solid #DFE1E6" }}>
@@ -715,51 +757,31 @@ export default function EstimateApp({ t }) {
           </tfoot>
         </table>
       )}
-
-      {/* Most over/under estimated */}
-      {(summary.mostOver || summary.mostUnder) && (
-        <div style={styles.insightsRow}>
-          {summary.mostOver && summary.mostOver.deviationPct > 0 && (
-            <div style={{ ...styles.insightCard, borderLeftColor: "#EB5A46" }}>
-              <div style={styles.insightLabel}>Mest overvurdert</div>
-              <div style={styles.insightValue}>{summary.mostOver.label}</div>
-              <div style={styles.insightDetail}>
-                {formatPct(summary.mostOver.deviationPct)} over estimat
-              </div>
-            </div>
-          )}
-          {summary.mostUnder && summary.mostUnder.deviationPct < 0 && (
-            <div style={{ ...styles.insightCard, borderLeftColor: "#0079BF" }}>
-              <div style={styles.insightLabel}>Mest undervurdert</div>
-              <div style={styles.insightValue}>{summary.mostUnder.label}</div>
-              <div style={styles.insightDetail}>
-                {formatPct(summary.mostUnder.deviationPct)} under estimat
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────
-
 const styles = {
-  center: { textAlign: "center", padding: 48, fontSize: 16, color: "#5E6C84" },
+  center: { textAlign: "center", padding: 24, color: "#5E6C84" },
+  empty: {
+    textAlign: "center",
+    padding: 32,
+    color: "#5E6C84",
+    fontSize: 15,
+  },
 
-  // Summary cards
+  // Summary row
   summaryRow: {
     display: "flex",
+    flexWrap: "wrap",
     gap: 12,
     marginBottom: 16,
-    flexWrap: "wrap",
   },
   summaryCard: {
     flex: "1 1 140px",
     backgroundColor: "#F4F5F7",
     borderRadius: 6,
-    padding: "12px 16px",
+    padding: "12px 14px",
     minWidth: 120,
   },
   summaryLabel: {
@@ -775,6 +797,13 @@ const styles = {
     color: "#172B4D",
     fontVariantNumeric: "tabular-nums",
     fontFamily: "monospace, sans-serif",
+  },
+
+  // Original estimate hint
+  originalHint: {
+    fontWeight: 400,
+    fontSize: 11,
+    color: "#8993A4",
   },
 
   // Date filter bar
@@ -857,85 +886,48 @@ const styles = {
     backgroundColor: "#fff",
     cursor: "pointer",
     fontSize: 13,
+    color: "#172B4D",
     height: 34,
     boxSizing: "border-box",
   },
 
   // Table
-  empty: { textAlign: "center", padding: 48, color: "#5E6C84", fontSize: 15 },
-  table: { width: "100%", borderCollapse: "collapse" },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
   th: {
     textAlign: "left",
     fontSize: 11,
     fontWeight: 600,
     color: "#5E6C84",
-    textTransform: "uppercase",
-    padding: "8px 10px",
+    padding: "8px 8px",
     borderBottom: "2px solid #DFE1E6",
+    whiteSpace: "nowrap",
   },
   thRight: {
     textAlign: "right",
     fontSize: 11,
     fontWeight: 600,
     color: "#5E6C84",
-    textTransform: "uppercase",
-    padding: "8px 10px",
+    padding: "8px 8px",
     borderBottom: "2px solid #DFE1E6",
     whiteSpace: "nowrap",
   },
   td: {
-    padding: "8px 10px",
-    fontSize: 14,
+    padding: "8px 8px",
     borderBottom: "1px solid #F4F5F7",
     color: "#172B4D",
   },
   tdSub: {
-    padding: "8px 10px",
-    fontSize: 13,
+    padding: "8px 8px",
     borderBottom: "1px solid #F4F5F7",
     color: "#5E6C84",
+    fontSize: 12,
   },
   tdTime: {
-    padding: "8px 10px",
-    fontSize: 14,
+    padding: "8px 8px",
     borderBottom: "1px solid #F4F5F7",
-    color: "#172B4D",
     textAlign: "right",
-    fontWeight: 600,
-    whiteSpace: "nowrap",
-    fontVariantNumeric: "tabular-nums",
     fontFamily: "monospace, sans-serif",
-  },
-
-  // Insights
-  insightsRow: {
-    display: "flex",
-    gap: 12,
-    marginTop: 20,
-    flexWrap: "wrap",
-  },
-  insightCard: {
-    flex: "1 1 200px",
-    backgroundColor: "#FAFBFC",
-    borderRadius: 6,
-    padding: "12px 16px",
-    borderLeft: "4px solid #DFE1E6",
-  },
-  insightLabel: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: "#5E6C84",
-    textTransform: "uppercase",
-    marginBottom: 4,
-  },
-  insightValue: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: "#172B4D",
-    marginBottom: 2,
-  },
-  insightDetail: {
-    fontSize: 13,
-    color: "#5E6C84",
+    fontVariantNumeric: "tabular-nums",
+    whiteSpace: "nowrap",
   },
 };
