@@ -191,6 +191,8 @@ export default function EstimateCardApp({ t }) {
     return <div style={styles.center}>Laster...</div>;
   }
 
+  const estimateEntries = Object.entries(estimates);
+
   return (
     <div style={styles.container}>
       {/* Estimate input */}
@@ -258,7 +260,7 @@ export default function EstimateCardApp({ t }) {
       </div>
 
       {/* Estimate table */}
-      {Object.keys(estimates).length > 0 && (
+      {estimateEntries.length > 0 && (
         <table style={styles.table}>
           <thead>
             <tr>
@@ -270,7 +272,7 @@ export default function EstimateCardApp({ t }) {
             </tr>
           </thead>
           <tbody>
-            {Object.entries(estimates).map(([mId, est]) => {
+            {estimateEntries.map(([mId, est]) => {
               const actual = timeData[mId]
                 ? getTotalWithActive(timeData[mId])
                 : 0;
@@ -342,6 +344,64 @@ export default function EstimateCardApp({ t }) {
                 </tr>
               );
             })}
+            {estimateEntries.length > 1 &&
+              (() => {
+                const totalEstimated = estimateEntries.reduce(
+                  (s, [, e]) => s + e.estimatedMs,
+                  0,
+                );
+                const totalActual = estimateEntries.reduce(
+                  (s, [mId]) =>
+                    s + (timeData[mId] ? getTotalWithActive(timeData[mId]) : 0),
+                  0,
+                );
+                const totalRemaining = Math.max(
+                  0,
+                  totalEstimated - totalActual,
+                );
+                const totalIsOver = totalActual > totalEstimated;
+                return (
+                  <tr>
+                    <td style={{ ...styles.td, fontWeight: 600 }}>Totalt</td>
+                    <td
+                      style={{
+                        ...styles.td,
+                        textAlign: "right",
+                        fontFamily: "monospace",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {formatDuration(totalEstimated, true)}
+                    </td>
+                    <td
+                      style={{
+                        ...styles.td,
+                        textAlign: "right",
+                        fontFamily: "monospace",
+                        fontWeight: 600,
+                        color: totalIsOver ? "#EB5A46" : "#172B4D",
+                      }}
+                    >
+                      {formatDuration(totalActual, true)}
+                    </td>
+                    <td
+                      style={{
+                        ...styles.td,
+                        textAlign: "right",
+                        fontFamily: "monospace",
+                        fontWeight: 600,
+                        color:
+                          totalRemaining === 0 && totalActual > 0
+                            ? "#EB5A46"
+                            : "#5E6C84",
+                      }}
+                    >
+                      {formatDuration(totalRemaining, true)}
+                    </td>
+                    <td style={{ ...styles.td, padding: "2px" }}></td>
+                  </tr>
+                );
+              })()}
           </tbody>
         </table>
       )}
