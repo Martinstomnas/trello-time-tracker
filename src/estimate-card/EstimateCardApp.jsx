@@ -234,7 +234,7 @@ export default function EstimateCardApp({ t }) {
           <div style={styles.estimateRow}>
             <input
               type="text"
-              placeholder="f.eks. 2t 30m"
+              placeholder="f.eks. 2t"
               value={estimateInput}
               onChange={(e) => setEstimateInput(e.target.value)}
               onKeyDown={(e) => {

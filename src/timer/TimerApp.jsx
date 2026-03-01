@@ -320,11 +320,13 @@ export default function TimerApp({ t }) {
               disabled={saving || selectedMembers.length === 0}
               title="Trekk fra tid"
             >
-              −
+              Trekk
+              <br />
+              fra
             </button>
             <input
               type="text"
-              placeholder="f.eks. 1t"
+              placeholder="f.eks. 2t"
               value={manualInput}
               onChange={(e) => setManualInput(e.target.value)}
               onKeyDown={(e) => {
@@ -339,7 +341,9 @@ export default function TimerApp({ t }) {
               disabled={saving || selectedMembers.length === 0}
               title="Legg til tid"
             >
-              +
+              Legg
+              <br />
+              til
             </button>
           </div>
           <div style={{ marginTop: 6 }}>
@@ -504,7 +508,7 @@ const styles = {
     margin: 0,
   },
   smallBtn: {
-    width: 32,
+    width: 40,
     height: 32,
     padding: 0,
     margin: 0,
@@ -512,8 +516,8 @@ const styles = {
     borderRadius: 4,
     backgroundColor: "#61BD4F",
     color: "#fff",
-    fontSize: 14,
-    lineHeight: 1,
+    fontSize: 9,
+    lineHeight: 1.1,
     fontWeight: 700,
     cursor: "pointer",
     display: "flex",
@@ -521,9 +525,10 @@ const styles = {
     justifyContent: "center",
     boxSizing: "border-box",
     flexShrink: 0,
+    textAlign: "center",
   },
   smallBtnRed: {
-    width: 32,
+    width: 40,
     height: 32,
     padding: 0,
     margin: 0,
@@ -531,8 +536,8 @@ const styles = {
     borderRadius: 4,
     backgroundColor: "#EB5A46",
     color: "#fff",
-    fontSize: 14,
-    lineHeight: 1,
+    fontSize: 9,
+    lineHeight: 1.1,
     fontWeight: 700,
     cursor: "pointer",
     display: "flex",
@@ -540,6 +545,7 @@ const styles = {
     justifyContent: "center",
     boxSizing: "border-box",
     flexShrink: 0,
+    textAlign: "center",
   },
   dateRow: { display: "flex", alignItems: "center", gap: 8, marginTop: 4 },
   dateInput: {
