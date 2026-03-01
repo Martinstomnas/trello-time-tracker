@@ -17,9 +17,11 @@ export function formatDuration(ms, short = false) {
   const seconds = totalSeconds % 60;
 
   if (short) {
-    if (hours > 0) return `${hours}t ${minutes}m`;
-    if (minutes > 0) return `${minutes}m`;
-    return `${seconds}s`;
+    const parts = [];
+    if (hours > 0) parts.push(`${hours}t`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    if (parts.length === 0) return `${seconds}s`;
+    return parts.join(" ");
   }
 
   const parts = [];

@@ -272,7 +272,7 @@ export default function TimerApp({ t }) {
         </button>
 
         <div style={styles.myTotal}>
-          Din totale tid: <strong>{formatDuration(displayTotal)}</strong>
+          Din totale tid: <strong>{formatDuration(displayTotal, true)}</strong>
         </div>
       </div>
 
@@ -373,9 +373,10 @@ export default function TimerApp({ t }) {
                       ...styles.td,
                       textAlign: "right",
                       fontFamily: "monospace",
+                      fontWeight: 600,
                     }}
                   >
-                    {formatDuration(m.total)}
+                    {formatDuration(m.total, true)}
                   </td>
                 </tr>
               ))}
@@ -395,7 +396,7 @@ export default function TimerApp({ t }) {
                       fontWeight: 600,
                     }}
                   >
-                    {formatDuration(grandTotal)}
+                    {formatDuration(grandTotal, true)}
                   </td>
                 </tr>
               )}
