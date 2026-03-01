@@ -434,7 +434,7 @@ export default function EstimateCardApp({ t }) {
 }
 
 const styles = {
-  container: { padding: "4px 0", fontSize: 14 },
+  container: { padding: "4px 20px", fontSize: 14 },
   center: { textAlign: "center", padding: 24 },
 
   /* ── 2-column top row ── */
