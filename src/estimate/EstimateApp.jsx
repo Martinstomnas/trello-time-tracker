@@ -6,7 +6,7 @@ import React, {
   useRef,
 } from "react";
 import { getBoardEstimateReport } from "../utils/estimateStorage.js";
-import { formatDuration, getTotalWithActive } from "../utils/time.js";
+import { formatDuration } from "../utils/time.js";
 
 /**
  * EstimateApp – Estimation report tab showing estimated vs actual time.

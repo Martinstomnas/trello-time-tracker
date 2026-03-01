@@ -1,6 +1,6 @@
 # Trello Time Tracker Power-Up
 
-A free, open-source Trello Power-Up for time tracking and estimation. Track time per card, per person, set time estimates, view reports with charts and date filtering, and export to CSV/JSON.
+A free, open-source Trello Power-Up for time tracking and estimation. Track time per card, per person, set time estimates, view reports with charts and date filtering, and export to CSV.
 
 ## Features
 
@@ -39,7 +39,7 @@ A free, open-source Trello Power-Up for time tracking and estimation. Track time
 - **Polling** – reports auto-refresh every 5–30 seconds to detect changes from other users
 - **Reset time** – per-card "Tilbakestill tid" button with confirmation dialog (works even for archived/deleted cards)
 - **Stop active tracking** – stop timers directly from the report view
-- **CSV and JSON export**
+- **CSV export**
 
 ### Estimation Reports (Tidsestimering)
 
