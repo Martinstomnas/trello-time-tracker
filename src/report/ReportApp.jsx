@@ -11,7 +11,7 @@ import {
   stopActiveTimersByIds,
 } from "../utils/storage.js";
 import { formatDuration, getTotalWithActive } from "../utils/time.js";
-import { downloadCSV, downloadJSON } from "../utils/export.js";
+import { downloadCSV } from "../utils/export.js";
 import ReportChart from "../components/ReportChart.jsx";
 
 /**
@@ -477,12 +477,6 @@ export default function ReportApp({ t, hideHeader }) {
             style={styles.exportBtn}
           >
             Eksporter CSV
-          </button>
-          <button
-            onClick={() => downloadJSON(reportData)}
-            style={styles.exportBtn}
-          >
-            Eksporter JSON
           </button>
         </div>
       </div>

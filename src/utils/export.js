@@ -41,15 +41,7 @@ export function downloadCSV(reportData, filename = "time-report.csv") {
     return;
   }
 
-  const headers = [
-    "Kort",
-    "Liste",
-    "Labels",
-    "Person",
-    "Tid (ms)",
-    "Tid",
-    "Aktiv",
-  ];
+  const headers = ["Kort", "Liste", "Labels", "Person", "Tid", "Aktiv"];
   const csvLines = [
     headers.join(";"),
     ...rows.map((r) =>
@@ -58,7 +50,6 @@ export function downloadCSV(reportData, filename = "time-report.csv") {
         _esc(r.listName),
         _esc(r.labels),
         _esc(r.memberName),
-        r.totalMs,
         _esc(r.totalFormatted),
         r.isActive ? "Ja" : "Nei",
       ].join(";"),
