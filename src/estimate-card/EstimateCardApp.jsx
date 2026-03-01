@@ -441,8 +441,8 @@ const styles = {
   topRow: {
     display: "flex",
     alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 16,
+    justifyContent: "flex-start", // ← legger seg etter checkboksene
+    gap: 50, // litt mer luft mellom kolonnene
     padding: "8px 0",
   },
   leftCol: {

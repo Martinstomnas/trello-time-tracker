@@ -413,7 +413,7 @@ export default function TimerApp({ t }) {
 }
 
 const styles = {
-  container: { padding: "4px 20px", fontSize: 14 },
+  container: { padding: "4px 20", fontSize: 14 },
   center: { textAlign: "center", padding: 24 },
 
   /* ── 3-column top row ── */
