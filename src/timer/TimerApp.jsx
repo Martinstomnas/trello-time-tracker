@@ -327,6 +327,9 @@ export default function TimerApp({ t }) {
               placeholder="f.eks. 1t"
               value={manualInput}
               onChange={(e) => setManualInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleManualAdd();
+              }}
               style={styles.input}
               disabled={saving}
             />
