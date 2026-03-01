@@ -380,7 +380,13 @@ export default function TimerApp({ t }) {
                       fontWeight: 600,
                     }}
                   >
-                    {formatDuration(m.total, true)}
+                    {m.active ? (
+                      <span style={styles.activeTimeText}>
+                        {formatDuration(m.total, false)}
+                      </span>
+                    ) : (
+                      formatDuration(m.total, true)
+                    )}
                   </td>
                 </tr>
               ))}
@@ -400,7 +406,13 @@ export default function TimerApp({ t }) {
                       fontWeight: 600,
                     }}
                   >
-                    {formatDuration(grandTotal, true)}
+                    {members.some((m) => m.active) ? (
+                      <span style={styles.activeTimeText}>
+                        {formatDuration(grandTotal, false)}
+                      </span>
+                    ) : (
+                      formatDuration(grandTotal, true)
+                    )}
                   </td>
                 </tr>
               )}
@@ -574,4 +586,11 @@ const styles = {
   },
   td: { padding: "5px 6px", fontSize: 13, borderBottom: "1px solid #F4F5F7" },
   totalTd: { borderTop: "2px solid #DFE1E6" },
+
+  activeTimeText: {
+    color: "#61BD4F",
+    textDecoration: "none",
+    borderBottom: "1px dashed #61BD4F",
+    paddingBottom: 1,
+  },
 };
