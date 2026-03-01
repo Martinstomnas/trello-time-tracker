@@ -754,8 +754,6 @@ function trelloLabelColor(color) {
 // Styles
 const styles = {
   container: {
-    maxWidth: 960,
-    margin: "0 auto",
     fontFamily:
       "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif",
   },

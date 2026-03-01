@@ -167,7 +167,7 @@ function downloadEstimateCSV(aggregated, groupBy) {
     "Gjenstående",
     "Avvik",
     "Avvik %",
-    "Accuracy",
+    "Estimatpresisjon",
   ];
 
   const csvLines = [
@@ -521,7 +521,7 @@ export default function EstimateApp({ t }) {
           </div>
         </div>
         <div style={styles.summaryCard}>
-          <div style={styles.summaryLabel}>Snitt accuracy</div>
+          <div style={styles.summaryLabel}>Snitt estimatpresisjon</div>
           <div
             style={{
               ...styles.summaryValue,
@@ -604,7 +604,7 @@ export default function EstimateApp({ t }) {
           >
             <option value="deviation">Avvik (størst først)</option>
             <option value="estimated">Estimert tid (mest først)</option>
-            <option value="accuracy">Accuracy (lavest først)</option>
+            <option value="accuracy">Estimatpresisjon (lavest først)</option>
             <option value="name">Navn (A-Å)</option>
           </select>
         </div>
@@ -646,7 +646,7 @@ export default function EstimateApp({ t }) {
               <th style={styles.thRight}>Gjenstående</th>
               <th style={styles.thRight}>Avvik</th>
               <th style={styles.thRight}>Avvik %</th>
-              <th style={styles.thRight}>Accuracy</th>
+              <th style={styles.thRight}>Estimatpresisjon</th>
             </tr>
           </thead>
           <tbody>
@@ -792,7 +792,7 @@ const styles = {
     marginBottom: 4,
   },
   summaryValue: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: 700,
     color: "#172B4D",
     fontVariantNumeric: "tabular-nums",
@@ -892,14 +892,16 @@ const styles = {
   },
 
   // Table
-  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
+  table: { width: "100%", borderCollapse: "collapse" },
   th: {
     textAlign: "left",
     fontSize: 11,
     fontWeight: 600,
     color: "#5E6C84",
-    padding: "8px 8px",
+    textTransform: "uppercase",
+    padding: "8px 10px",
     borderBottom: "2px solid #DFE1E6",
+    backgroundColor: "#fff",
     whiteSpace: "nowrap",
   },
   thRight: {
@@ -907,27 +909,36 @@ const styles = {
     fontSize: 11,
     fontWeight: 600,
     color: "#5E6C84",
-    padding: "8px 8px",
+    textTransform: "uppercase",
+    padding: "8px 10px",
     borderBottom: "2px solid #DFE1E6",
+    backgroundColor: "#fff",
     whiteSpace: "nowrap",
   },
   td: {
-    padding: "8px 8px",
+    padding: "8px 10px",
+    fontSize: 14,
     borderBottom: "1px solid #F4F5F7",
     color: "#172B4D",
+    backgroundColor: "inherit",
   },
   tdSub: {
-    padding: "8px 8px",
+    padding: "8px 10px",
     borderBottom: "1px solid #F4F5F7",
     color: "#5E6C84",
-    fontSize: 12,
+    fontSize: 13,
+    backgroundColor: "inherit",
   },
   tdTime: {
-    padding: "8px 8px",
+    padding: "8px 10px",
+    fontSize: 14,
     borderBottom: "1px solid #F4F5F7",
+    color: "#172B4D",
+    backgroundColor: "inherit",
     textAlign: "right",
-    fontFamily: "monospace, sans-serif",
-    fontVariantNumeric: "tabular-nums",
+    fontWeight: 600,
     whiteSpace: "nowrap",
+    fontVariantNumeric: "tabular-nums",
+    fontFamily: "monospace, sans-serif",
   },
 };

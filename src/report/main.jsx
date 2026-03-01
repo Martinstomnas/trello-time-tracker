@@ -83,7 +83,7 @@ const styles = {
     marginBottom: -2,
   },
   content: {
-    padding: "0",
+    padding: "0 20px",
   },
 };
 
