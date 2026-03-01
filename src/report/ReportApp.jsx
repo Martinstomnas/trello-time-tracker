@@ -327,8 +327,14 @@ export default function ReportApp({ t, hideHeader }) {
       await stopActiveTimersByIds(timerIds, cardInfoMap);
       setConfirmStop(null);
       await loadData();
+      // Signal Trello to refresh card badges
+      try {
+        await t.set("board", "shared", "lastUpdate", Date.now());
+      } catch (e) {
+        // ignore – best effort
+      }
     },
-    [loadData, cardInfoMap],
+    [t, loadData, cardInfoMap],
   );
 
   if (loading) {
