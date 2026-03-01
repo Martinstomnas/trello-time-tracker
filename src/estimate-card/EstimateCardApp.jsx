@@ -195,38 +195,12 @@ export default function EstimateCardApp({ t }) {
 
   return (
     <div style={styles.container}>
-      {/* Estimate input */}
-      <div style={{ marginBottom: 12 }}>
-        <div style={styles.sectionTitle}>Sett tidsestimat</div>
-        <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-          <input
-            type="text"
-            placeholder="f.eks. 2t 30m"
-            value={estimateInput}
-            onChange={(e) => setEstimateInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSetEstimate(estimateInput);
-            }}
-            style={styles.input}
-            disabled={savingEstimate}
-          />
-          <button
-            onClick={() => handleSetEstimate(estimateInput)}
-            disabled={savingEstimate || !estimateInput.trim()}
-            style={{
-              ...styles.smallBtn,
-              opacity: savingEstimate || !estimateInput.trim() ? 0.5 : 1,
-            }}
-            title="Sett estimat"
-          >
-            ✓
-          </button>
-        </div>
-
-        {/* Member selection */}
+      {/* ── Top row: 2-column layout ── */}
+      <div style={styles.topRow}>
+        {/* LEFT: Person checkboxes */}
         {boardMembers.length > 1 && (
-          <div style={{ marginTop: 6 }}>
-            <span style={styles.label}>Personer</span>
+          <div style={styles.leftCol}>
+            <div style={styles.sectionTitle}>Personer</div>
             <div style={styles.memberCheckboxList}>
               <label style={styles.memberCheckbox}>
                 <input
@@ -254,173 +228,206 @@ export default function EstimateCardApp({ t }) {
           </div>
         )}
 
-        <div style={{ fontSize: 11, color: "#8993A4", marginTop: 6 }}>
-          Settes for valgte person(er) over.
+        {/* RIGHT: Estimate input */}
+        <div style={styles.rightCol}>
+          <div style={styles.sectionTitle}>Sett tidsestimat</div>
+          <div style={styles.estimateRow}>
+            <input
+              type="text"
+              placeholder="f.eks. 2t 30m"
+              value={estimateInput}
+              onChange={(e) => setEstimateInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSetEstimate(estimateInput);
+              }}
+              style={styles.input}
+              disabled={savingEstimate}
+            />
+            <button
+              onClick={() => handleSetEstimate(estimateInput)}
+              disabled={savingEstimate || !estimateInput.trim()}
+              style={{
+                ...styles.smallBtn,
+                opacity: savingEstimate || !estimateInput.trim() ? 0.5 : 1,
+              }}
+              title="Sett estimat"
+            >
+              ✓
+            </button>
+          </div>
+          <div style={{ fontSize: 11, color: "#8993A4", marginTop: 6 }}>
+            Settes for valgte person(er).
+          </div>
         </div>
       </div>
 
-      {/* Estimate table */}
+      {/* ── Table: Estimate breakdown (full width) ── */}
       {estimateEntries.length > 0 && (
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Person</th>
-              <th style={{ ...styles.th, textAlign: "right" }}>Estimat</th>
-              <th style={{ ...styles.th, textAlign: "right" }}>Faktisk</th>
-              <th style={{ ...styles.th, textAlign: "right" }}>Gjenstående</th>
-              <th style={{ ...styles.th, width: 30 }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {estimateEntries.map(([mId, est]) => {
-              const actual = timeData[mId]
-                ? getTotalWithActive(timeData[mId])
-                : 0;
-              const remaining = Math.max(0, est.estimatedMs - actual);
-              const isOver = actual > est.estimatedMs;
-              const hasOriginal =
-                est.originalMs !== null && est.originalMs !== est.estimatedMs;
-              return (
-                <tr key={mId}>
-                  <td style={styles.td}>
-                    {est.name || mId}
-                    {mId === memberId ? " (deg)" : ""}
-                  </td>
-                  <td
-                    style={{
-                      ...styles.td,
-                      textAlign: "right",
-                      fontWeight: 600,
-                      fontFamily: "monospace",
-                    }}
-                  >
-                    {formatDuration(est.estimatedMs, true)}
-                    {hasOriginal && (
-                      <span
-                        style={styles.originalHint}
-                        title={`Opprinnelig estimat: ${formatDuration(est.originalMs, true)}`}
-                      >
-                        (oppr. {formatDuration(est.originalMs, true)})
-                      </span>
-                    )}
-                  </td>
-                  <td
-                    style={{
-                      ...styles.td,
-                      textAlign: "right",
-                      fontFamily: "monospace",
-                      color: isOver ? "#EB5A46" : "#172B4D",
-                    }}
-                  >
-                    {formatDuration(actual, true)}
-                  </td>
-                  <td
-                    style={{
-                      ...styles.td,
-                      textAlign: "right",
-                      fontFamily: "monospace",
-                      color:
-                        remaining === 0 && actual > 0 ? "#EB5A46" : "#5E6C84",
-                    }}
-                  >
-                    {formatDuration(remaining, true)}
-                  </td>
-                  <td
-                    style={{
-                      ...styles.td,
-                      textAlign: "center",
-                      padding: "2px",
-                    }}
-                  >
-                    <button
-                      onClick={() => handleRemoveEstimate(mId)}
-                      disabled={savingEstimate}
-                      style={styles.removeBtn}
-                      title="Fjern estimat"
-                    >
-                      ✕
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-            {estimateEntries.length > 1 &&
-              (() => {
-                const totalEstimated = estimateEntries.reduce(
-                  (s, [, e]) => s + e.estimatedMs,
-                  0,
-                );
-                const totalActual = estimateEntries.reduce(
-                  (s, [mId]) =>
-                    s + (timeData[mId] ? getTotalWithActive(timeData[mId]) : 0),
-                  0,
-                );
-                const totalRemaining = Math.max(
-                  0,
-                  totalEstimated - totalActual,
-                );
-                const totalIsOver = totalActual > totalEstimated;
+        <div style={styles.tableSection}>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Person</th>
+                <th style={{ ...styles.th, textAlign: "right" }}>Estimat</th>
+                <th style={{ ...styles.th, textAlign: "right" }}>Faktisk</th>
+                <th style={{ ...styles.th, textAlign: "right" }}>
+                  Gjenstående
+                </th>
+                <th style={{ ...styles.th, width: 30 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {estimateEntries.map(([mId, est]) => {
+                const actual = timeData[mId]
+                  ? getTotalWithActive(timeData[mId])
+                  : 0;
+                const remaining = Math.max(0, est.estimatedMs - actual);
+                const isOver = actual > est.estimatedMs;
+                const hasOriginal =
+                  est.originalMs !== null && est.originalMs !== est.estimatedMs;
                 return (
-                  <tr>
-                    <td
-                      style={{
-                        ...styles.td,
-                        ...styles.totalTd,
-                        fontWeight: 600,
-                      }}
-                    >
-                      Totalt
+                  <tr key={mId}>
+                    <td style={styles.td}>
+                      {est.name || mId}
+                      {mId === memberId ? " (deg)" : ""}
                     </td>
                     <td
                       style={{
                         ...styles.td,
-                        ...styles.totalTd,
                         textAlign: "right",
-                        fontFamily: "monospace",
                         fontWeight: 600,
+                        fontFamily: "monospace",
                       }}
                     >
-                      {formatDuration(totalEstimated, true)}
+                      {formatDuration(est.estimatedMs, true)}
+                      {hasOriginal && (
+                        <span
+                          style={styles.originalHint}
+                          title={`Opprinnelig estimat: ${formatDuration(est.originalMs, true)}`}
+                        >
+                          (oppr. {formatDuration(est.originalMs, true)})
+                        </span>
+                      )}
                     </td>
                     <td
                       style={{
                         ...styles.td,
-                        ...styles.totalTd,
                         textAlign: "right",
                         fontFamily: "monospace",
-                        fontWeight: 600,
-                        color: totalIsOver ? "#EB5A46" : "#172B4D",
+                        color: isOver ? "#EB5A46" : "#172B4D",
                       }}
                     >
-                      {formatDuration(totalActual, true)}
+                      {formatDuration(actual, true)}
                     </td>
                     <td
                       style={{
                         ...styles.td,
-                        ...styles.totalTd,
                         textAlign: "right",
                         fontFamily: "monospace",
-                        fontWeight: 600,
                         color:
-                          totalRemaining === 0 && totalActual > 0
-                            ? "#EB5A46"
-                            : "#5E6C84",
+                          remaining === 0 && actual > 0 ? "#EB5A46" : "#5E6C84",
                       }}
                     >
-                      {formatDuration(totalRemaining, true)}
+                      {formatDuration(remaining, true)}
                     </td>
                     <td
                       style={{
                         ...styles.td,
-                        ...styles.totalTd,
+                        textAlign: "center",
                         padding: "2px",
                       }}
-                    ></td>
+                    >
+                      <button
+                        onClick={() => handleRemoveEstimate(mId)}
+                        disabled={savingEstimate}
+                        style={styles.removeBtn}
+                        title="Fjern estimat"
+                      >
+                        ✕
+                      </button>
+                    </td>
                   </tr>
                 );
-              })()}
-          </tbody>
-        </table>
+              })}
+              {estimateEntries.length > 1 &&
+                (() => {
+                  const totalEstimated = estimateEntries.reduce(
+                    (s, [, e]) => s + e.estimatedMs,
+                    0,
+                  );
+                  const totalActual = estimateEntries.reduce(
+                    (s, [mId]) =>
+                      s +
+                      (timeData[mId] ? getTotalWithActive(timeData[mId]) : 0),
+                    0,
+                  );
+                  const totalRemaining = Math.max(
+                    0,
+                    totalEstimated - totalActual,
+                  );
+                  const totalIsOver = totalActual > totalEstimated;
+                  return (
+                    <tr>
+                      <td
+                        style={{
+                          ...styles.td,
+                          ...styles.totalTd,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Totalt
+                      </td>
+                      <td
+                        style={{
+                          ...styles.td,
+                          ...styles.totalTd,
+                          textAlign: "right",
+                          fontFamily: "monospace",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {formatDuration(totalEstimated, true)}
+                      </td>
+                      <td
+                        style={{
+                          ...styles.td,
+                          ...styles.totalTd,
+                          textAlign: "right",
+                          fontFamily: "monospace",
+                          fontWeight: 600,
+                          color: totalIsOver ? "#EB5A46" : "#172B4D",
+                        }}
+                      >
+                        {formatDuration(totalActual, true)}
+                      </td>
+                      <td
+                        style={{
+                          ...styles.td,
+                          ...styles.totalTd,
+                          textAlign: "right",
+                          fontFamily: "monospace",
+                          fontWeight: 600,
+                          color:
+                            totalRemaining === 0 && totalActual > 0
+                              ? "#EB5A46"
+                              : "#5E6C84",
+                        }}
+                      >
+                        {formatDuration(totalRemaining, true)}
+                      </td>
+                      <td
+                        style={{
+                          ...styles.td,
+                          ...styles.totalTd,
+                          padding: "2px",
+                        }}
+                      ></td>
+                    </tr>
+                  );
+                })()}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -429,6 +436,25 @@ export default function EstimateCardApp({ t }) {
 const styles = {
   container: { padding: "4px 0", fontSize: 14 },
   center: { textAlign: "center", padding: 24 },
+
+  /* ── 2-column top row ── */
+  topRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 16,
+    padding: "8px 0",
+  },
+  leftCol: {
+    flex: "0 0 auto",
+    minWidth: 130,
+  },
+  rightCol: {
+    flex: "0 0 auto",
+    width: 160,
+  },
+
+  /* ── Section titles ── */
   sectionTitle: {
     fontSize: 12,
     fontWeight: 600,
@@ -436,15 +462,25 @@ const styles = {
     textTransform: "uppercase",
     marginBottom: 6,
   },
+
+  /* ── Estimate input row ── */
+  estimateRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+  },
   input: {
     flex: 1,
+    height: 32,
     padding: "5px 8px",
     border: "1px solid #DFE1E6",
     borderRadius: 4,
     fontSize: 13,
+    minWidth: 0,
+    boxSizing: "border-box",
   },
   smallBtn: {
-    width: 40,
+    width: 32,
     height: 32,
     padding: 0,
     border: "1px solid transparent",
@@ -458,8 +494,11 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     boxSizing: "border-box",
+    flexShrink: 0,
   },
   label: { fontSize: 12, color: "#5E6C84" },
+
+  /* ── Person checkboxes ── */
   memberCheckboxList: {
     display: "flex",
     flexDirection: "column",
@@ -477,6 +516,13 @@ const styles = {
     padding: "2px 0",
     margin: 0,
     minHeight: 24,
+  },
+
+  /* ── Table section ── */
+  tableSection: {
+    marginTop: 16,
+    borderTop: "1px solid #DFE1E6",
+    paddingTop: 10,
   },
   table: { width: "100%", borderCollapse: "collapse" },
   th: {
