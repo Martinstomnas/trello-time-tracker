@@ -362,10 +362,19 @@ export default function EstimateCardApp({ t }) {
                 const totalIsOver = totalActual > totalEstimated;
                 return (
                   <tr>
-                    <td style={{ ...styles.td, fontWeight: 600 }}>Totalt</td>
                     <td
                       style={{
                         ...styles.td,
+                        ...styles.totalTd,
+                        fontWeight: 600,
+                      }}
+                    >
+                      Totalt
+                    </td>
+                    <td
+                      style={{
+                        ...styles.td,
+                        ...styles.totalTd,
                         textAlign: "right",
                         fontFamily: "monospace",
                         fontWeight: 600,
@@ -376,6 +385,7 @@ export default function EstimateCardApp({ t }) {
                     <td
                       style={{
                         ...styles.td,
+                        ...styles.totalTd,
                         textAlign: "right",
                         fontFamily: "monospace",
                         fontWeight: 600,
@@ -387,6 +397,7 @@ export default function EstimateCardApp({ t }) {
                     <td
                       style={{
                         ...styles.td,
+                        ...styles.totalTd,
                         textAlign: "right",
                         fontFamily: "monospace",
                         fontWeight: 600,
@@ -398,7 +409,13 @@ export default function EstimateCardApp({ t }) {
                     >
                       {formatDuration(totalRemaining, true)}
                     </td>
-                    <td style={{ ...styles.td, padding: "2px" }}></td>
+                    <td
+                      style={{
+                        ...styles.td,
+                        ...styles.totalTd,
+                        padding: "2px",
+                      }}
+                    ></td>
                   </tr>
                 );
               })()}
@@ -474,6 +491,7 @@ const styles = {
     fontSize: 13,
     borderBottom: "1px solid #F4F5F7",
   },
+  totalTd: { borderTop: "2px solid #DFE1E6" },
   originalHint: {
     fontWeight: 400,
     fontSize: 10,

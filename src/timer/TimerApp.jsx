@@ -235,6 +235,7 @@ export default function TimerApp({ t }) {
       total: getTotalWithActive(d),
       active: d.activeStart != null,
     }))
+    .filter((m) => m.total > 0 || m.active)
     .sort((a, b) => b.total - a.total);
 
   const grandTotal = members.reduce((s, m) => s + m.total, 0);
@@ -380,10 +381,15 @@ export default function TimerApp({ t }) {
               ))}
               {members.length > 1 && (
                 <tr>
-                  <td style={{ ...styles.td, fontWeight: 600 }}>Totalt</td>
+                  <td
+                    style={{ ...styles.td, ...styles.totalTd, fontWeight: 600 }}
+                  >
+                    Totalt
+                  </td>
                   <td
                     style={{
                       ...styles.td,
+                      ...styles.totalTd,
                       textAlign: "right",
                       fontFamily: "monospace",
                       fontWeight: 600,
@@ -492,6 +498,7 @@ const styles = {
     borderBottom: "1px solid #DFE1E6",
   },
   td: { padding: "5px 6px", fontSize: 13, borderBottom: "1px solid #F4F5F7" },
+  totalTd: { borderTop: "2px solid #DFE1E6" },
   memberCheckboxList: {
     display: "flex",
     flexDirection: "column",
