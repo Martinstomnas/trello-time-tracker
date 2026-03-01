@@ -220,10 +220,11 @@ if (!window.TrelloPowerUp) {
                   text: formatDuration(total, false),
                   color: active ? "green" : null,
                   callback: function (tc) {
-                    return tc.popup({
+                    return tc.modal({
                       title: "Tidstracker",
                       url: BASE + "/timer.html",
-                      height: 400,
+                      height: 500,
+                      args: { tab: "timer" },
                     });
                   },
                 },
@@ -238,10 +239,11 @@ if (!window.TrelloPowerUp) {
                     : "Ikke estimert",
                 color: isOver ? "red" : null,
                 callback: function (tc) {
-                  return tc.popup({
-                    title: "Tidsestimat",
-                    url: BASE + "/estimate-card.html",
-                    height: 400,
+                  return tc.modal({
+                    title: "Tidstracker",
+                    url: BASE + "/timer.html",
+                    height: 500,
+                    args: { tab: "estimate" },
                   });
                 },
               });
@@ -261,21 +263,11 @@ if (!window.TrelloPowerUp) {
             icon: BASE + "/clock-icon.svg",
             text: "Tidstracker",
             callback: function (tc) {
-              return tc.popup({
+              return tc.modal({
                 title: "Tidstracker",
                 url: BASE + "/timer.html",
-                height: 460,
-              });
-            },
-          },
-          {
-            icon: BASE + "/clock-icon.svg",
-            text: "Tidsestimat",
-            callback: function (tc) {
-              return tc.popup({
-                title: "Tidsestimat",
-                url: BASE + "/estimate-card.html",
-                height: 400,
+                height: 500,
+                fullscreen: false,
               });
             },
           },
