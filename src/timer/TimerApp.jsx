@@ -256,70 +256,12 @@ export default function TimerApp({ t }) {
 
   return (
     <div style={styles.container}>
-      {/* Timer display */}
-      <div style={styles.timerSection}>
-        <div style={styles.timerDisplay}>{formatTimer(displayTotal)}</div>
-
-        <button
-          onClick={handleToggle}
-          disabled={saving || selectedMembers.length === 0}
-          style={{
-            ...styles.toggleBtn,
-            backgroundColor: getToggleColor(),
-          }}
-        >
-          {getToggleLabel()}
-        </button>
-
-        <div style={styles.myTotal}>
-          Din totale tid: <strong>{formatDuration(displayTotal, true)}</strong>
-        </div>
-      </div>
-
-      {/* Manual adjustment */}
-      <div style={styles.section}>
-        <div style={styles.sectionTitle}>Manuell registrering</div>
-        <div style={styles.manualRow}>
-          <input
-            type="text"
-            placeholder="f.eks. 1t 30m"
-            value={manualInput}
-            onChange={(e) => setManualInput(e.target.value)}
-            style={styles.input}
-            disabled={saving}
-          />
-          <button
-            onClick={handleManualAdd}
-            style={styles.smallBtn}
-            disabled={saving || selectedMembers.length === 0}
-            title="Legg til tid"
-          >
-            +
-          </button>
-          <button
-            onClick={handleManualSubtract}
-            style={styles.smallBtnRed}
-            disabled={saving || selectedMembers.length === 0}
-            title="Trekk fra tid"
-          >
-            −
-          </button>
-        </div>
-        <div style={{ marginTop: 6 }}>
-          <span style={styles.label}>Dato</span>
-          <div style={styles.dateRow}>
-            <input
-              type="date"
-              value={manualDate}
-              onChange={(e) => setManualDate(e.target.value)}
-              style={styles.dateInput}
-              disabled={saving}
-            />
-          </div>
-        </div>
+      {/* ── Top row: 3-column layout ── */}
+      <div style={styles.topRow}>
+        {/* LEFT: Person checkboxes */}
         {boardMembers.length > 1 && (
-          <div style={{ marginTop: 6 }}>
-            <span style={styles.label}>Personer</span>
+          <div style={styles.leftCol}>
+            <div style={styles.sectionTitle}>Personer</div>
             <div style={styles.memberCheckboxList}>
               <label style={styles.memberCheckbox}>
                 <input
@@ -348,11 +290,73 @@ export default function TimerApp({ t }) {
             </div>
           </div>
         )}
+
+        {/* CENTER: Timer display + toggle + total */}
+        <div style={styles.centerCol}>
+          <div style={styles.timerDisplay}>{formatTimer(displayTotal)}</div>
+          <button
+            onClick={handleToggle}
+            disabled={saving || selectedMembers.length === 0}
+            style={{
+              ...styles.toggleBtn,
+              backgroundColor: getToggleColor(),
+            }}
+          >
+            {getToggleLabel()}
+          </button>
+          <div style={styles.myTotal}>
+            Din totale tid:{" "}
+            <strong>{formatDuration(displayTotal, true)}</strong>
+          </div>
+        </div>
+
+        {/* RIGHT: Manual registration */}
+        <div style={styles.rightCol}>
+          <div style={styles.sectionTitle}>Manuell registrering</div>
+          <div style={styles.manualRow}>
+            <button
+              onClick={handleManualSubtract}
+              style={styles.smallBtnRed}
+              disabled={saving || selectedMembers.length === 0}
+              title="Trekk fra tid"
+            >
+              −
+            </button>
+            <input
+              type="text"
+              placeholder="f.eks. 1t"
+              value={manualInput}
+              onChange={(e) => setManualInput(e.target.value)}
+              style={styles.input}
+              disabled={saving}
+            />
+            <button
+              onClick={handleManualAdd}
+              style={styles.smallBtn}
+              disabled={saving || selectedMembers.length === 0}
+              title="Legg til tid"
+            >
+              +
+            </button>
+          </div>
+          <div style={{ marginTop: 6 }}>
+            <span style={styles.label}>Dato</span>
+            <div style={styles.dateRow}>
+              <input
+                type="date"
+                value={manualDate}
+                onChange={(e) => setManualDate(e.target.value)}
+                style={styles.dateInput}
+                disabled={saving}
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Per-person breakdown */}
+      {/* ── Table: Per-person breakdown (full width) ── */}
       {members.length > 0 && (
-        <div style={styles.section}>
+        <div style={styles.tableSection}>
           <table style={styles.table}>
             <thead>
               <tr>
@@ -411,7 +415,32 @@ export default function TimerApp({ t }) {
 const styles = {
   container: { padding: "4px 0", fontSize: 14 },
   center: { textAlign: "center", padding: 24 },
-  timerSection: { textAlign: "center", marginBottom: 16 },
+
+  /* ── 3-column top row ── */
+  topRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 16,
+    padding: "8px 0",
+  },
+  leftCol: {
+    flex: "0 0 auto",
+    minWidth: 130,
+  },
+  centerCol: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    textAlign: "center",
+  },
+  rightCol: {
+    flex: "0 0 auto",
+    width: 160,
+  },
+
+  /* ── Timer ── */
   timerDisplay: {
     fontSize: 36,
     fontWeight: 700,
@@ -431,7 +460,8 @@ const styles = {
     marginBottom: 8,
   },
   myTotal: { fontSize: 13, color: "#5E6C84", marginTop: 4 },
-  section: { marginTop: 12, borderTop: "1px solid #DFE1E6", paddingTop: 10 },
+
+  /* ── Section titles ── */
   sectionTitle: {
     fontSize: 12,
     fontWeight: 600,
@@ -439,14 +469,12 @@ const styles = {
     textTransform: "uppercase",
     marginBottom: 6,
   },
-  manualRow: { display: "flex", alignItems: "baseline" },
-  dateRow: { display: "flex", alignItems: "center", gap: 8, marginTop: 6 },
-  dateInput: {
-    padding: "5px 8px",
-    border: "1px solid #DFE1E6",
-    borderRadius: 4,
-    fontSize: 13,
-    color: "#172B4D",
+
+  /* ── Manual registration ── */
+  manualRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
   },
   input: {
     flex: 1,
@@ -454,10 +482,10 @@ const styles = {
     border: "1px solid #DFE1E6",
     borderRadius: 4,
     fontSize: 13,
+    minWidth: 0,
   },
-  label: { fontSize: 12, color: "#5E6C84" },
   smallBtn: {
-    width: 40,
+    width: 32,
     height: 32,
     padding: 0,
     border: "1px solid transparent",
@@ -471,10 +499,10 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     boxSizing: "border-box",
-    marginLeft: 6,
+    flexShrink: 0,
   },
   smallBtnRed: {
-    width: 40,
+    width: 32,
     height: 32,
     padding: 0,
     border: "1px solid transparent",
@@ -488,18 +516,21 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     boxSizing: "border-box",
-    marginLeft: 1,
+    flexShrink: 0,
   },
-  table: { width: "100%", borderCollapse: "collapse" },
-  th: {
-    textAlign: "left",
-    fontSize: 11,
-    color: "#5E6C84",
-    padding: "4px 6px",
-    borderBottom: "1px solid #DFE1E6",
+  dateRow: { display: "flex", alignItems: "center", gap: 8, marginTop: 4 },
+  dateInput: {
+    padding: "5px 8px",
+    border: "1px solid #DFE1E6",
+    borderRadius: 4,
+    fontSize: 13,
+    color: "#172B4D",
+    width: "100%",
+    boxSizing: "border-box",
   },
-  td: { padding: "5px 6px", fontSize: 13, borderBottom: "1px solid #F4F5F7" },
-  totalTd: { borderTop: "2px solid #DFE1E6" },
+  label: { fontSize: 12, color: "#5E6C84" },
+
+  /* ── Person checkboxes ── */
   memberCheckboxList: {
     display: "flex",
     flexDirection: "column",
@@ -518,4 +549,21 @@ const styles = {
     padding: "2px 0",
     minHeight: 24,
   },
+
+  /* ── Table section ── */
+  tableSection: {
+    marginTop: 16,
+    borderTop: "1px solid #DFE1E6",
+    paddingTop: 10,
+  },
+  table: { width: "100%", borderCollapse: "collapse" },
+  th: {
+    textAlign: "left",
+    fontSize: 11,
+    color: "#5E6C84",
+    padding: "4px 6px",
+    borderBottom: "1px solid #DFE1E6",
+  },
+  td: { padding: "5px 6px", fontSize: 13, borderBottom: "1px solid #F4F5F7" },
+  totalTd: { borderTop: "2px solid #DFE1E6" },
 };
