@@ -51,11 +51,6 @@ export default function SettingsApp({ t }) {
         Vis tids-badge på kortoversikten
       </label>
 
-      <p style={styles.hint}>
-        Data lagres i Trellos egen lagring (t.set / t.get). Ingen ekstern server
-        brukes. Alle teammedlemmer på boardet kan se sporet tid.
-      </p>
-
       <button onClick={handleSave} style={styles.saveBtn}>
         Lagre innstillinger
       </button>

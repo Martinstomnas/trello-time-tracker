@@ -11,7 +11,7 @@ import {
   stopActiveTimersByIds,
 } from "../utils/storage.js";
 import { formatDuration, getTotalWithActive } from "../utils/time.js";
-import { downloadCSV, downloadJSON } from "../utils/export.js";
+import { downloadCSV } from "../utils/export.js";
 import ReportChart from "../components/ReportChart.jsx";
 
 /**
@@ -117,7 +117,7 @@ function formatDateInput(isoString) {
   return isoString.slice(0, 10); // YYYY-MM-DD
 }
 
-export default function ReportApp({ t }) {
+export default function ReportApp({ t, hideHeader }) {
   const [reportData, setReportData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -136,6 +136,7 @@ export default function ReportApp({ t }) {
   const [cardInfoMap, setCardInfoMap] = useState({});
   const [now, setNow] = useState(Date.now());
   const tickRef = useRef(null);
+  const pollRef = useRef(null);
 
   // Build filters from state
   const getFilters = useCallback(() => {
@@ -166,6 +167,18 @@ export default function ReportApp({ t }) {
     }
   }, [t, getFilters]);
 
+  // Silent reload (no loading spinner) for polling
+  const silentReload = useCallback(async () => {
+    try {
+      const filters = getFilters();
+      const result = await getBoardTimeReport(t, filters);
+      setReportData(result.cards);
+      setCardInfoMap(result.cardInfoMap);
+    } catch (err) {
+      console.error("Silent reload error:", err);
+    }
+  }, [t, getFilters]);
+
   // Load on mount and when filters change
   useEffect(() => {
     loadData();
@@ -183,6 +196,37 @@ export default function ReportApp({ t }) {
     }
     return () => clearInterval(tickRef.current);
   }, [reportData]);
+
+  // Poll Supabase every 5s to detect changes from other users
+  useEffect(() => {
+    const POLL_INTERVAL = 5000;
+
+    const startPolling = () => {
+      clearInterval(pollRef.current);
+      pollRef.current = setInterval(() => {
+        if (document.visibilityState === "visible") {
+          silentReload();
+        }
+      }, POLL_INTERVAL);
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        silentReload(); // Refresh immediately when tab becomes visible
+        startPolling();
+      } else {
+        clearInterval(pollRef.current);
+      }
+    };
+
+    startPolling();
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(pollRef.current);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [silentReload]);
 
   // Handle preset change
   const handlePresetChange = (preset) => {
@@ -283,8 +327,14 @@ export default function ReportApp({ t }) {
       await stopActiveTimersByIds(timerIds, cardInfoMap);
       setConfirmStop(null);
       await loadData();
+      // Signal Trello to refresh card badges
+      try {
+        await t.set("board", "shared", "lastUpdate", Date.now());
+      } catch (e) {
+        // ignore – best effort
+      }
     },
-    [loadData, cardInfoMap],
+    [t, loadData, cardInfoMap],
   );
 
   if (loading) {
@@ -299,7 +349,7 @@ export default function ReportApp({ t }) {
     <div style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
-        <h2 style={styles.title}>Tidsrapport</h2>
+        {!hideHeader && <h2 style={styles.title}>Tidsrapport</h2>}
         <div style={styles.totalBadge}>
           {activeLabel}:{" "}
           <strong style={styles.totalBadgeTime}>
@@ -427,12 +477,6 @@ export default function ReportApp({ t }) {
             style={styles.exportBtn}
           >
             Eksporter CSV
-          </button>
-          <button
-            onClick={() => downloadJSON(reportData)}
-            style={styles.exportBtn}
-          >
-            Eksporter JSON
           </button>
         </div>
       </div>
@@ -704,8 +748,6 @@ function trelloLabelColor(color) {
 // Styles
 const styles = {
   container: {
-    maxWidth: 960,
-    margin: "0 auto",
     fontFamily:
       "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif",
   },

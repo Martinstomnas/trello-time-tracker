@@ -81,6 +81,19 @@ function getCardTimeData(cardId) {
   });
 }
 
+function getCardEstimateTotal(cardId) {
+  return supabaseGet(
+    "time_estimates",
+    "select=estimated_ms&card_id=eq." + cardId,
+  ).then(function (estimates) {
+    var total = 0;
+    for (var i = 0; i < estimates.length; i++) {
+      total += estimates[i].estimated_ms || 0;
+    }
+    return total;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Formatting helpers
 // ---------------------------------------------------------------------------
@@ -149,15 +162,34 @@ if (!window.TrelloPowerUp) {
         return t
           .card("id")
           .then(function (card) {
-            return getCardTimeData(card.id).then(function (data) {
+            return Promise.all([
+              getCardTimeData(card.id),
+              getCardEstimateTotal(card.id),
+            ]).then(function (results) {
+              var data = results[0];
+              var estimateTotal = results[1];
               var total = cardTotalMs(data);
               var active = hasActiveTimer(data);
-              if (total === 0 && !active) return [];
+
+              var text =
+                formatDuration(total, true) +
+                " / " +
+                (estimateTotal > 0
+                  ? formatDuration(estimateTotal, true)
+                  : "Ikke estimert");
+
+              var color = null;
+              if (active) {
+                color = "green";
+              } else if (estimateTotal > 0 && total > estimateTotal) {
+                color = "red";
+              }
+
               return [
                 {
                   icon: BASE + "/clock-icon.svg",
-                  text: formatDuration(total, true),
-                  color: active ? "green" : "null",
+                  text: text,
+                  color: color,
                   refresh: 30,
                 },
               ];
@@ -173,24 +205,50 @@ if (!window.TrelloPowerUp) {
         return t
           .card("id")
           .then(function (card) {
-            return getCardTimeData(card.id).then(function (data) {
+            return Promise.all([
+              getCardTimeData(card.id),
+              getCardEstimateTotal(card.id),
+            ]).then(function (results) {
+              var data = results[0];
+              var estimateTotal = results[1];
               var total = cardTotalMs(data);
               var active = hasActiveTimer(data);
-              if (total === 0 && !active) return [];
-              return [
+
+              var badges = [
                 {
                   title: "Registrert tid",
                   text: formatDuration(total, false),
-                  color: active ? "green" : "null",
+                  color: active ? "green" : null,
                   callback: function (tc) {
-                    return tc.popup({
+                    return tc.modal({
                       title: "Tidstracker",
                       url: BASE + "/timer.html",
-                      height: 400,
+                      height: 500,
+                      args: { tab: "timer" },
                     });
                   },
                 },
               ];
+
+              var isOver = estimateTotal > 0 && total > estimateTotal;
+              badges.push({
+                title: "Estimert tid",
+                text:
+                  estimateTotal > 0
+                    ? formatDuration(estimateTotal, false)
+                    : "Ikke estimert",
+                color: isOver ? "red" : null,
+                callback: function (tc) {
+                  return tc.modal({
+                    title: "Tidstracker",
+                    url: BASE + "/timer.html",
+                    height: 500,
+                    args: { tab: "estimate" },
+                  });
+                },
+              });
+
+              return badges;
             });
           })
           .catch(function (e) {
@@ -205,10 +263,11 @@ if (!window.TrelloPowerUp) {
             icon: BASE + "/clock-icon.svg",
             text: "Tidstracker",
             callback: function (tc) {
-              return tc.popup({
+              return tc.modal({
                 title: "Tidstracker",
                 url: BASE + "/timer.html",
-                height: 460,
+                height: 500,
+                fullscreen: false,
               });
             },
           },

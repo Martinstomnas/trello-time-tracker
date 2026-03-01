@@ -1,22 +1,60 @@
 # Trello Time Tracker Power-Up
 
-A free, open-source Trello Power-Up for time tracking. Track time per card, per person, view reports with charts and date filtering, and export to CSV/JSON.
+A free, open-source Trello Power-Up for time tracking and estimation. Track time per card, per person, set time estimates, view reports with charts and date filtering, and export to CSV.
 
 ## Features
+
+### Time Tracking (Registrert tid)
 
 - **Start/stop timer** on any Trello card with one click
 - **Per-person tracking** – each member logs time under their own identity
 - **Multi-user timer control** – start and stop timers for other board members from the same popup
-- **Visual badge** on cards (green = timer running)
-- **Manual time entry** – add or subtract time with custom date and member selection
+- **Visual badge** on cards showing tracked time (green when a timer is running)
+- **Live-updating badge** – card badges refresh every 30 seconds, showing seconds when a timer is active
+- **Manual time entry** – add or subtract time with "Legg til tid" / "Trekk fra tid" buttons, with custom date and member selection
+- **Enter key support** – press Enter in the manual time input to add time (same as clicking the button)
 - **Adjust time for others** – log time on behalf of other board members
-- **Board-level reports** with:
-  - Date filtering (today, yesterday, this/last week, this/last month, this year, custom range)
-  - Grouping by card, person, or label
-  - "Active cards" column when grouping by person
-  - Table and chart views (bar chart, pie chart)
-  - CSV and JSON export
-- **Multi-board support** – each board has isolated data
+- **Smart member selection** – when returning to a card, members with active timers are automatically pre-selected
+- **Negative time protection** – subtracting time never goes below zero
+- **Labels sync live** – label changes in Trello are reflected in reports immediately (fetched at runtime, not stored)
+
+### Time Estimation (Estimert tid)
+
+- **Per-person estimates** – set time estimates for each member on a card
+- **Re-estimation with history** – when an estimate changes, the original value is preserved and displayed (e.g. "2t (oppr. 4t)")
+- **Grace period** – changes within 2 minutes of the last update are treated as corrections (no history logged)
+- **Auto-calculated remaining time** – "Gjenstående" is always estimated − actual, no manual overrides
+- **Estimate badge** on cards showing estimated time, with red indicator when actual exceeds estimate
+
+### Board-Level Reports (Tidsrapport)
+
+- **Date filtering** with presets: today, yesterday, this/last week, this/last month, this year, and custom range
+- **Grouping** by card, person, or label/category
+- **"Active cards" column** when grouping by person – shows which cards each person is actively tracking
+- **Sorting** by time (most first) or name (A–Å)
+- **Table and chart views** – bar chart and pie chart using Chart.js
+- **Charts use Trello's actual label colors** (Atlassian Design System tokens)
+- **Stable layout** with tabular numerals (`font-variant-numeric: tabular-nums`) for time columns
+- **Live-updating times** – active timers tick in real-time with green dashed styling
+- **Polling** – reports auto-refresh every 5–30 seconds to detect changes from other users
+- **Reset time** – per-card "Tilbakestill tid" button with confirmation dialog (works even for archived/deleted cards)
+- **Stop active tracking** – stop timers directly from the report view
+- **CSV export**
+
+### Estimation Reports (Tidsestimering)
+
+- **Estimated vs actual comparison** with deviation, deviation %, and accuracy score
+- **Summary cards** showing totals for estimated, actual, remaining time, and average accuracy
+- **Grouping** by card, person, or label
+- **Sorting** by deviation, estimated time, accuracy, or name
+- **Original estimate tracking** – shows original values when re-estimated
+- **Color-coded deviation** – green (≤10%), yellow (≤25%), red (>25%)
+- **Date filtering** with the same presets as time reports
+- **CSV export** including original estimate column
+
+### Multi-Board Support
+
+- Each board has isolated data – all queries are scoped by `board_id`
 
 ## Tech Stack
 
@@ -46,7 +84,7 @@ npm install
 ### 2. Set up Supabase
 
 1. Create a new project at [supabase.com](https://supabase.com)
-2. Go to **SQL Editor** and run:
+2. Go to **SQL Editor** and run the following to create the time tracking tables:
 
 ```sql
 create table time_entries (
@@ -91,7 +129,52 @@ create policy "Allow all on active_timers" on active_timers
   for all using (true) with check (true);
 ```
 
-3. Go to **Project Settings** → **API** and copy the **Project URL** and **Publishable Key**
+3. Then run this to create the estimation tables:
+
+```sql
+create table time_estimates (
+  id uuid primary key default gen_random_uuid(),
+  board_id text not null,
+  card_id text not null,
+  member_id text not null,
+  member_name text,
+  estimated_ms bigint not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create unique index idx_estimates_card_member
+on time_estimates(card_id, member_id);
+create index idx_estimates_board on time_estimates(board_id);
+create index idx_estimates_card on time_estimates(card_id);
+
+create table estimate_history (
+  id uuid primary key default gen_random_uuid(),
+  estimate_id uuid references time_estimates(id) on delete cascade,
+  board_id text not null,
+  card_id text not null,
+  member_id text not null,
+  member_name text,
+  previous_ms bigint not null,
+  new_ms bigint not null,
+  reason text,
+  changed_at timestamptz default now()
+);
+
+create index idx_estimate_history_card on estimate_history(card_id);
+create index idx_estimate_history_estimate on estimate_history(estimate_id);
+
+alter table time_estimates enable row level security;
+alter table estimate_history enable row level security;
+
+create policy "Allow all on time_estimates" on time_estimates
+  for all using (true) with check (true);
+
+create policy "Allow all on estimate_history" on estimate_history
+  for all using (true) with check (true);
+```
+
+4. Go to **Project Settings** → **API** and copy the **Project URL** and **Publishable Key**
 
 ### 3. Configure environment variables
 
@@ -164,14 +247,19 @@ trello-time-tracker/
 ├── src/
 │   ├── utils/
 │   │   ├── supabase.js     # Supabase client
-│   │   ├── storage.js      # All data operations (start/stop/adjust/report)
+│   │   ├── storage.js      # Time tracking operations (start/stop/adjust/report)
+│   │   ├── estimateStorage.js # Estimate operations (set/remove/report/history)
 │   │   ├── time.js         # Time formatting and parsing
 │   │   └── export.js       # CSV and JSON export
 │   ├── timer/
-│   │   ├── main.jsx        # Timer popup entry point
+│   │   ├── main.jsx        # Timer popup entry point (tabbed: Registrert tid / Estimert tid)
 │   │   └── TimerApp.jsx    # Timer UI (start/stop, manual entry, member list)
+│   ├── estimate-card/
+│   │   └── EstimateCardApp.jsx # Card-level estimate management
+│   ├── estimate/
+│   │   └── EstimateApp.jsx # Board-level estimation report
 │   ├── report/
-│   │   ├── main.jsx        # Report modal entry point
+│   │   ├── main.jsx        # Report modal entry point (tabbed: Tidsrapport / Tidsestimering)
 │   │   └── ReportApp.jsx   # Report UI (filters, table, charts, export)
 │   ├── settings/
 │   │   ├── main.jsx        # Settings popup entry point
@@ -182,11 +270,10 @@ trello-time-tracker/
 ├── timer.html              # Timer popup HTML
 ├── report.html             # Report modal HTML
 ├── settings.html           # Settings popup HTML
-├── vite.config.js          # Vite config with env injection plugin
+├── vite.config.js          # Vite config with HTTPS and env injection
 ├── package.json
 ├── LICENSE                 # MIT License
 └── .env.example            # Template for environment variables
-
 ```
 
 ## Data Model
@@ -203,6 +290,17 @@ All data is stored in Supabase (PostgreSQL):
 **`active_timers`** – One row per currently running timer:
 
 - `board_id`, `card_id`, `member_id`, `member_name`, `started_at`
+
+**`time_estimates`** – One row per member per card:
+
+- `board_id`, `card_id`, `member_id`, `member_name`
+- `estimated_ms`
+- `created_at`, `updated_at`
+
+**`estimate_history`** – Log of re-estimations (scope changes):
+
+- `estimate_id` (FK → time_estimates), `board_id`, `card_id`, `member_id`, `member_name`
+- `previous_ms`, `new_ms`, `reason`, `changed_at`
 
 ## License
 
