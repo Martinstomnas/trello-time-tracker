@@ -16,7 +16,7 @@ import {
 /**
  * EstimateCardApp – Card-level estimate popup.
  * Separate window for managing time estimates per person on a card.
- * Supports both card-level (general) and per-person estimates.
+ * Supports both card-level (general) and per-person estimates via checkboxes.
  */
 export default function EstimateCardApp({ t }) {
   const [timeData, setTimeData] = useState({});
@@ -29,7 +29,6 @@ export default function EstimateCardApp({ t }) {
   const [estimateInput, setEstimateInput] = useState("");
   const [savingEstimate, setSavingEstimate] = useState(false);
   const [now, setNow] = useState(Date.now());
-  const [estimateMode, setEstimateMode] = useState("person"); // "person" | "card"
   const tickRef = useRef(null);
   const pollRef = useRef(null);
 
@@ -137,15 +136,21 @@ export default function EstimateCardApp({ t }) {
 
       setSavingEstimate(true);
       try {
-        if (estimateMode === "card") {
-          // Card-level estimate
+        // Separate card-level and person selections
+        const hasCardSelection = selectedMembers.includes("_card");
+        const personSelections = selectedMembers.filter((id) => id !== "_card");
+
+        // Set card-level estimate if selected
+        if (hasCardSelection) {
           await setCardEstimate(t, ms);
-        } else {
-          // Person estimates (existing logic)
+        }
+
+        // Set person estimates for selected persons
+        if (personSelections.length > 0) {
           const targets =
-            selectedMembers.includes("self") && selectedMembers.length === 1
+            personSelections.includes("self") && personSelections.length === 1
               ? [null]
-              : selectedMembers
+              : personSelections
                   .map((id) => {
                     if (id === "self")
                       return { id: memberId, fullName: memberName };
@@ -170,7 +175,6 @@ export default function EstimateCardApp({ t }) {
     },
     [
       t,
-      estimateMode,
       selectedMembers,
       memberId,
       memberName,
@@ -214,56 +218,68 @@ export default function EstimateCardApp({ t }) {
     0,
   );
 
+  // Determine helper text based on selection
+  const hasCardSelection = selectedMembers.includes("_card");
+  const personCount = selectedMembers.filter((id) => id !== "_card").length;
+  let helperText = "";
+  if (hasCardSelection && personCount > 0) {
+    helperText = "Settes for kortet og valgte person(er).";
+  } else if (hasCardSelection) {
+    helperText = "Settes for hele kortet.";
+  } else if (personCount > 0) {
+    helperText = "Settes for valgte person(er).";
+  } else {
+    helperText = "Velg minst én person eller kort.";
+  }
+
   return (
     <div style={styles.container}>
-      {/* ── Estimate mode toggle ── */}
-      <div style={styles.modeToggle}>
-        <button
-          onClick={() => setEstimateMode("card")}
-          style={estimateMode === "card" ? styles.modeActive : styles.modeBtn}
-        >
-          Kort (generelt)
-        </button>
-        <button
-          onClick={() => setEstimateMode("person")}
-          style={estimateMode === "person" ? styles.modeActive : styles.modeBtn}
-        >
-          Per person
-        </button>
-      </div>
-
       {/* ── Top row: 2-column layout ── */}
       <div style={styles.topRow}>
-        {/* LEFT: Person checkboxes – only show in person mode */}
-        {estimateMode === "person" && boardMembers.length > 1 && (
-          <div style={styles.leftCol}>
-            <div style={styles.sectionTitle}>Personer</div>
-            <div style={styles.memberCheckboxList}>
-              <label style={styles.memberCheckbox}>
-                <input
-                  type="checkbox"
-                  checked={selectedMembers.includes("self")}
-                  onChange={() => toggleMember("self")}
-                  style={{ margin: 0 }}
-                />
-                <span>Meg selv</span>
-              </label>
-              {boardMembers
-                .filter((m) => m.id !== memberId)
-                .map((m) => (
-                  <label key={m.id} style={styles.memberCheckbox}>
-                    <input
-                      type="checkbox"
-                      checked={selectedMembers.includes(m.id)}
-                      onChange={() => toggleMember(m.id)}
-                      style={{ margin: 0 }}
-                    />
-                    <span>{m.fullName}</span>
-                  </label>
-                ))}
-            </div>
+        {/* LEFT: Person checkboxes + card checkbox */}
+        <div style={styles.leftCol}>
+          <div style={styles.sectionTitle}>Estimat for</div>
+          <div style={styles.memberCheckboxList}>
+            {boardMembers.length > 1 && (
+              <>
+                <label style={styles.memberCheckbox}>
+                  <input
+                    type="checkbox"
+                    checked={selectedMembers.includes("self")}
+                    onChange={() => toggleMember("self")}
+                    style={{ margin: 0 }}
+                  />
+                  <span>Meg selv</span>
+                </label>
+                {boardMembers
+                  .filter((m) => m.id !== memberId)
+                  .map((m) => (
+                    <label key={m.id} style={styles.memberCheckbox}>
+                      <input
+                        type="checkbox"
+                        checked={selectedMembers.includes(m.id)}
+                        onChange={() => toggleMember(m.id)}
+                        style={{ margin: 0 }}
+                      />
+                      <span>{m.fullName}</span>
+                    </label>
+                  ))}
+                <div style={styles.checkboxDivider} />
+              </>
+            )}
+            <label style={styles.memberCheckbox}>
+              <input
+                type="checkbox"
+                checked={selectedMembers.includes("_card")}
+                onChange={() => toggleMember("_card")}
+                style={{ margin: 0 }}
+              />
+              <span style={{ fontStyle: "italic", color: "#5E6C84" }}>
+                Kort (generelt)
+              </span>
+            </label>
           </div>
-        )}
+        </div>
 
         {/* RIGHT: Estimate input */}
         <div style={styles.rightCol}>
@@ -282,10 +298,19 @@ export default function EstimateCardApp({ t }) {
             />
             <button
               onClick={() => handleSetEstimate(estimateInput)}
-              disabled={savingEstimate || !estimateInput.trim()}
+              disabled={
+                savingEstimate ||
+                !estimateInput.trim() ||
+                selectedMembers.length === 0
+              }
               style={{
                 ...styles.smallBtn,
-                opacity: savingEstimate || !estimateInput.trim() ? 0.5 : 1,
+                opacity:
+                  savingEstimate ||
+                  !estimateInput.trim() ||
+                  selectedMembers.length === 0
+                    ? 0.5
+                    : 1,
               }}
               title="Sett estimat"
             >
@@ -293,9 +318,7 @@ export default function EstimateCardApp({ t }) {
             </button>
           </div>
           <div style={{ fontSize: 11, color: "#8993A4", marginTop: 6 }}>
-            {estimateMode === "card"
-              ? "Settes for hele kortet."
-              : "Settes for valgte person(er)."}
+            {helperText}
           </div>
         </div>
       </div>
@@ -484,35 +507,6 @@ const styles = {
   container: { padding: "4px 20px", fontSize: 14 },
   center: { textAlign: "center", padding: 24 },
 
-  /* ── Estimate mode toggle ── */
-  modeToggle: {
-    display: "flex",
-    gap: 0,
-    marginBottom: 8,
-    borderBottom: "1px solid #DFE1E6",
-    paddingBottom: 8,
-  },
-  modeBtn: {
-    padding: "6px 14px",
-    border: "1px solid #DFE1E6",
-    backgroundColor: "#fff",
-    cursor: "pointer",
-    fontSize: 12,
-    fontWeight: 500,
-    color: "#5E6C84",
-    borderRadius: 0,
-  },
-  modeActive: {
-    padding: "6px 14px",
-    border: "1px solid #0079BF",
-    backgroundColor: "#E4F0F6",
-    color: "#0079BF",
-    cursor: "pointer",
-    fontSize: 12,
-    fontWeight: 600,
-    borderRadius: 0,
-  },
-
   /* ── 2-column top row ── */
   topRow: {
     display: "flex",
@@ -596,6 +590,10 @@ const styles = {
     padding: "2px 0",
     margin: 0,
     minHeight: 24,
+  },
+  checkboxDivider: {
+    borderTop: "1px solid #DFE1E6",
+    margin: "4px 0",
   },
 
   /* ── Table section ── */
