@@ -220,7 +220,6 @@ export default function EstimateApp({ t }) {
   const [datePreset, setDatePreset] = useState("all");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
-  const [activeLabel, setActiveLabel] = useState("Totalt");
 
   const tickRef = useRef(null);
   const pollRef = useRef(null);
@@ -306,7 +305,6 @@ export default function EstimateApp({ t }) {
   const handlePresetChange = (preset) => {
     setDatePreset(preset);
     const range = getPresetRange(preset);
-    setActiveLabel(range.label);
     if (preset !== "custom") {
       setCustomFrom("");
       setCustomTo("");
