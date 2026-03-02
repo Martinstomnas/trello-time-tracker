@@ -54,7 +54,7 @@ A free, open-source Trello Power-Up for time tracking and estimation. Track time
 
 ### Multi-Board Support
 
-- Each board has isolated data – all queries are scoped by `board_id`
+- Each board has isolated data – all rows include a `board_id`, and board-level reports are scoped by `board_id`
 
 ## Tech Stack
 
