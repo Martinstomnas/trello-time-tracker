@@ -264,6 +264,33 @@ export default function EstimateCardApp({ t }) {
                       <span>{m.fullName}</span>
                     </label>
                   ))}
+                <div style={styles.selectAllRow}>
+                  <button
+                    style={styles.selectAllBtn}
+                    disabled={savingEstimate}
+                    onClick={() => {
+                      const personIds = [
+                        "self",
+                        ...boardMembers
+                          .filter((m) => m.id !== memberId)
+                          .map((m) => m.id),
+                      ];
+                      const hasCard = selectedMembers.includes("_card");
+                      setSelectedMembers(
+                        hasCard ? [...personIds, "_card"] : personIds,
+                      );
+                    }}
+                  >
+                    Velg alle
+                  </button>
+                  <button
+                    style={styles.selectAllBtn}
+                    disabled={savingEstimate}
+                    onClick={() => setSelectedMembers([])}
+                  >
+                    Fjern valg
+                  </button>
+                </div>
                 <div style={styles.checkboxDivider} />
               </>
             )}
@@ -629,5 +656,20 @@ const styles = {
     fontSize: 12,
     color: "#B04632",
     padding: "2px 4px",
+  },
+  selectAllRow: {
+    display: "flex",
+    gap: 0,
+    marginTop: 0,
+    marginBottom: 10,
+  },
+  selectAllBtn: {
+    padding: "3px 8px",
+    fontSize: 11,
+    border: "1px solid #DFE1E6",
+    borderRadius: 3,
+    backgroundColor: "#FAFBFC",
+    color: "#5E6C84",
+    cursor: "pointer",
   },
 };
