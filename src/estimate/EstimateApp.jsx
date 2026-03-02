@@ -432,6 +432,9 @@ export default function EstimateApp({ t }) {
 
       // ── Per-person estimates ──
       for (const [memberId, m] of Object.entries(card.members)) {
+        // Skip members with no personal estimate if card has a card-level estimate,
+        // because their actual time is already counted there
+        if (!m.estimatedMs && card.cardEstimateMs > 0) continue;
         if (!m.estimatedMs && !getActualMs(m)) continue;
 
         const actual = getActualMs(m);
