@@ -124,20 +124,20 @@ export async function setEstimate(t, estimatedMs, targetMember, reason) {
           reason: reason || null,
         });
       }
-      // else: within grace period – just overwrite, no history entry
+
+      // Update existing estimate
+      const { error } = await supabase
+        .from("time_estimates")
+        .update({
+          estimated_ms: estimatedMs,
+          member_name: member.fullName,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+
+      if (error)
+        console.error("[TimeTracker] setEstimate update error:", error);
     }
-
-    // Update existing estimate
-    const { error } = await supabase
-      .from("time_estimates")
-      .update({
-        estimated_ms: estimatedMs,
-        member_name: member.fullName,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", existing.id);
-
-    if (error) console.error("[TimeTracker] setEstimate update error:", error);
   } else {
     // Insert new estimate
     const { error } = await supabase.from("time_estimates").insert({
