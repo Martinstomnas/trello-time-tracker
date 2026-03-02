@@ -250,7 +250,7 @@ trello-time-tracker/
 │   │   ├── storage.js      # Time tracking operations (start/stop/adjust/report)
 │   │   ├── estimateStorage.js # Estimate operations (set/remove/report/history)
 │   │   ├── time.js         # Time formatting and parsing
-│   │   └── export.js       # CSV and JSON export
+│   │   └── export.js       # CSV export
 │   ├── timer/
 │   │   ├── main.jsx        # Timer popup entry point (tabbed: Registrert tid / Estimert tid)
 │   │   └── TimerApp.jsx    # Timer UI (start/stop, manual entry, member list)
