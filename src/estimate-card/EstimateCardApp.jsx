@@ -4,6 +4,8 @@ import {
   getCardEstimates,
   setEstimate,
   removeEstimate,
+  setCardEstimate,
+  removeCardEstimate,
 } from "../utils/estimateStorage.js";
 import {
   formatDuration,
@@ -14,6 +16,7 @@ import {
 /**
  * EstimateCardApp – Card-level estimate popup.
  * Separate window for managing time estimates per person on a card.
+ * Supports both card-level (general) and per-person estimates.
  */
 export default function EstimateCardApp({ t }) {
   const [timeData, setTimeData] = useState({});
@@ -26,6 +29,7 @@ export default function EstimateCardApp({ t }) {
   const [estimateInput, setEstimateInput] = useState("");
   const [savingEstimate, setSavingEstimate] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [estimateMode, setEstimateMode] = useState("person"); // "person" | "card"
   const tickRef = useRef(null);
   const pollRef = useRef(null);
 
@@ -133,20 +137,26 @@ export default function EstimateCardApp({ t }) {
 
       setSavingEstimate(true);
       try {
-        const targets =
-          selectedMembers.includes("self") && selectedMembers.length === 1
-            ? [null]
-            : selectedMembers
-                .map((id) => {
-                  if (id === "self")
-                    return { id: memberId, fullName: memberName };
-                  const bm = boardMembers.find((m) => m.id === id);
-                  return bm ? { id: bm.id, fullName: bm.fullName } : null;
-                })
-                .filter(Boolean);
+        if (estimateMode === "card") {
+          // Card-level estimate
+          await setCardEstimate(t, ms);
+        } else {
+          // Person estimates (existing logic)
+          const targets =
+            selectedMembers.includes("self") && selectedMembers.length === 1
+              ? [null]
+              : selectedMembers
+                  .map((id) => {
+                    if (id === "self")
+                      return { id: memberId, fullName: memberName };
+                    const bm = boardMembers.find((m) => m.id === id);
+                    return bm ? { id: bm.id, fullName: bm.fullName } : null;
+                  })
+                  .filter(Boolean);
 
-        for (const target of targets) {
-          await setEstimate(t, ms, target);
+          for (const target of targets) {
+            await setEstimate(t, ms, target);
+          }
         }
 
         setEstimateInput("");
@@ -160,6 +170,7 @@ export default function EstimateCardApp({ t }) {
     },
     [
       t,
+      estimateMode,
       selectedMembers,
       memberId,
       memberName,
@@ -173,9 +184,13 @@ export default function EstimateCardApp({ t }) {
     async (targetMemberId) => {
       setSavingEstimate(true);
       try {
-        const target =
-          targetMemberId === memberId ? null : { id: targetMemberId };
-        await removeEstimate(t, target);
+        if (targetMemberId === "_card") {
+          await removeCardEstimate(t);
+        } else {
+          const target =
+            targetMemberId === memberId ? null : { id: targetMemberId };
+          await removeEstimate(t, target);
+        }
         await refreshEstimates();
         await touchBadges();
       } catch (e) {
@@ -193,12 +208,34 @@ export default function EstimateCardApp({ t }) {
 
   const estimateEntries = Object.entries(estimates);
 
+  // Calculate total actual time across all members (for card-level estimate comparison)
+  const totalActualAllMembers = Object.values(timeData).reduce(
+    (s, d) => s + getTotalWithActive(d),
+    0,
+  );
+
   return (
     <div style={styles.container}>
+      {/* ── Estimate mode toggle ── */}
+      <div style={styles.modeToggle}>
+        <button
+          onClick={() => setEstimateMode("card")}
+          style={estimateMode === "card" ? styles.modeActive : styles.modeBtn}
+        >
+          Kort (generelt)
+        </button>
+        <button
+          onClick={() => setEstimateMode("person")}
+          style={estimateMode === "person" ? styles.modeActive : styles.modeBtn}
+        >
+          Per person
+        </button>
+      </div>
+
       {/* ── Top row: 2-column layout ── */}
       <div style={styles.topRow}>
-        {/* LEFT: Person checkboxes */}
-        {boardMembers.length > 1 && (
+        {/* LEFT: Person checkboxes – only show in person mode */}
+        {estimateMode === "person" && boardMembers.length > 1 && (
           <div style={styles.leftCol}>
             <div style={styles.sectionTitle}>Personer</div>
             <div style={styles.memberCheckboxList}>
@@ -256,7 +293,9 @@ export default function EstimateCardApp({ t }) {
             </button>
           </div>
           <div style={{ fontSize: 11, color: "#8993A4", marginTop: 6 }}>
-            Settes for valgte person(er).
+            {estimateMode === "card"
+              ? "Settes for hele kortet."
+              : "Settes for valgte person(er)."}
           </div>
         </div>
       </div>
@@ -267,7 +306,7 @@ export default function EstimateCardApp({ t }) {
           <table style={styles.table}>
             <thead>
               <tr>
-                <th style={styles.th}>Person</th>
+                <th style={styles.th}>Estimat</th>
                 <th style={{ ...styles.th, textAlign: "right" }}>Estimat</th>
                 <th style={{ ...styles.th, textAlign: "right" }}>Faktisk</th>
                 <th style={{ ...styles.th, textAlign: "right" }}>
@@ -278,9 +317,13 @@ export default function EstimateCardApp({ t }) {
             </thead>
             <tbody>
               {estimateEntries.map(([mId, est]) => {
-                const actual = timeData[mId]
-                  ? getTotalWithActive(timeData[mId])
-                  : 0;
+                // For card-level estimate, actual = sum of ALL tracked time
+                const actual =
+                  mId === "_card"
+                    ? totalActualAllMembers
+                    : timeData[mId]
+                      ? getTotalWithActive(timeData[mId])
+                      : 0;
                 const remaining = Math.max(0, est.estimatedMs - actual);
                 const isOver = actual > est.estimatedMs;
                 const hasOriginal =
@@ -288,7 +331,7 @@ export default function EstimateCardApp({ t }) {
                 return (
                   <tr key={mId}>
                     <td style={styles.td}>
-                      {est.name || mId}
+                      {mId === "_card" ? "Kort (generelt)" : est.name || mId}
                       {mId === memberId ? " (deg)" : ""}
                     </td>
                     <td
@@ -358,7 +401,11 @@ export default function EstimateCardApp({ t }) {
                   const totalActual = estimateEntries.reduce(
                     (s, [mId]) =>
                       s +
-                      (timeData[mId] ? getTotalWithActive(timeData[mId]) : 0),
+                      (mId === "_card"
+                        ? totalActualAllMembers
+                        : timeData[mId]
+                          ? getTotalWithActive(timeData[mId])
+                          : 0),
                     0,
                   );
                   const totalRemaining = Math.max(
@@ -437,12 +484,41 @@ const styles = {
   container: { padding: "4px 20px", fontSize: 14 },
   center: { textAlign: "center", padding: 24 },
 
+  /* ── Estimate mode toggle ── */
+  modeToggle: {
+    display: "flex",
+    gap: 0,
+    marginBottom: 8,
+    borderBottom: "1px solid #DFE1E6",
+    paddingBottom: 8,
+  },
+  modeBtn: {
+    padding: "6px 14px",
+    border: "1px solid #DFE1E6",
+    backgroundColor: "#fff",
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 500,
+    color: "#5E6C84",
+    borderRadius: 0,
+  },
+  modeActive: {
+    padding: "6px 14px",
+    border: "1px solid #0079BF",
+    backgroundColor: "#E4F0F6",
+    color: "#0079BF",
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 600,
+    borderRadius: 0,
+  },
+
   /* ── 2-column top row ── */
   topRow: {
     display: "flex",
     alignItems: "flex-start",
-    justifyContent: "flex-start", // ← legger seg etter checkboksene
-    gap: 50, // litt mer luft mellom kolonnene
+    justifyContent: "flex-start",
+    gap: 50,
     padding: "8px 0",
   },
   leftCol: {

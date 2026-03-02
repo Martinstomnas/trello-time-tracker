@@ -15,6 +15,7 @@ import { formatDuration } from "../utils/time.js";
  * - Gjenstående is always auto-calculated: estimat − faktisk
  * - Removed remaining_override / remaining_ms logic
  * - Shows original estimate when estimate was re-estimated
+ * - Supports card-level estimates (cardEstimateMs) alongside per-person estimates
  */
 
 // ── Date range presets (shared logic with ReportApp) ──────────────
@@ -145,6 +146,17 @@ function deviationColor(pct) {
   if (Math.abs(pct) <= 10) return "#61BD4F";
   if (Math.abs(pct) <= 25) return "#F2D600";
   return "#EB5A46";
+}
+
+/**
+ * Get the total actual time across all members for a card.
+ */
+function getCardTotalActualMs(card) {
+  let total = 0;
+  for (const m of Object.values(card.members)) {
+    total += getActualMs(m);
+  }
+  return total;
 }
 
 // ── CSV export ───────────────────────────────────────────────────
@@ -316,7 +328,109 @@ export default function EstimateApp({ t }) {
   const aggregated = useMemo(() => {
     const map = new Map();
 
+    /**
+     * Helper: add an estimate row into the map for card or label grouping.
+     */
+    const addToMap = (
+      key,
+      label,
+      listName,
+      estimated,
+      actual,
+      remaining,
+      originalMs,
+      card,
+    ) => {
+      if (groupBy === "label") {
+        // Label grouping
+        const labels = card.labels?.length
+          ? card.labels
+          : [{ name: "Uten label", color: "gray" }];
+        for (const lbl of labels) {
+          const lKey = lbl.name || lbl.color;
+          const existing = map.get(lKey) || {
+            label: lKey,
+            estimatedMs: 0,
+            originalMs: null,
+            actualMs: 0,
+            remainingMs: 0,
+            color: lbl.color,
+          };
+          existing.estimatedMs += estimated;
+          existing.actualMs += actual;
+          existing.remainingMs += remaining;
+          if (originalMs != null) {
+            existing.originalMs = (existing.originalMs || 0) + originalMs;
+          }
+          map.set(lKey, existing);
+        }
+        return;
+      }
+
+      const existing = map.get(key) || {
+        label,
+        listName,
+        cardId: groupBy === "card" ? card.cardId : undefined,
+        estimatedMs: 0,
+        originalMs: null,
+        actualMs: 0,
+        remainingMs: 0,
+      };
+      existing.estimatedMs += estimated;
+      existing.actualMs += actual;
+      existing.remainingMs += remaining;
+      if (originalMs != null) {
+        existing.originalMs = (existing.originalMs || 0) + originalMs;
+      }
+      map.set(key, existing);
+    };
+
     for (const card of reportData) {
+      // ── Card-level estimate ──
+      if (card.cardEstimateMs > 0) {
+        const totalActual = getCardTotalActualMs(card);
+        const estimated = card.cardEstimateMs;
+        const remaining = Math.max(0, estimated - totalActual);
+        const originalMs = card.cardEstimateOriginalMs ?? null;
+
+        if (groupBy === "card") {
+          addToMap(
+            card.cardId,
+            card.cardName,
+            card.listName,
+            estimated,
+            totalActual,
+            remaining,
+            originalMs,
+            card,
+          );
+        } else if (groupBy === "person") {
+          addToMap(
+            "_card_estimates",
+            "Kortestimater (ufordelt)",
+            undefined,
+            estimated,
+            totalActual,
+            remaining,
+            originalMs,
+            card,
+          );
+        } else {
+          // label grouping
+          addToMap(
+            null,
+            null,
+            null,
+            estimated,
+            totalActual,
+            remaining,
+            originalMs,
+            card,
+          );
+        }
+      }
+
+      // ── Per-person estimates ──
       for (const [memberId, m] of Object.entries(card.members)) {
         if (!m.estimatedMs && !getActualMs(m)) continue;
 
@@ -334,48 +448,30 @@ export default function EstimateApp({ t }) {
           key = memberId;
           label = m.name;
         } else {
-          // label grouping
-          const labels = card.labels?.length
-            ? card.labels
-            : [{ name: "Uten label", color: "gray" }];
-          for (const lbl of labels) {
-            const lKey = lbl.name || lbl.color;
-            const existing = map.get(lKey) || {
-              label: lKey,
-              estimatedMs: 0,
-              originalMs: null,
-              actualMs: 0,
-              remainingMs: 0,
-              color: lbl.color,
-            };
-            existing.estimatedMs += estimated;
-            existing.actualMs += actual;
-            existing.remainingMs += remaining;
-            // For label grouping, originalMs aggregation: sum if available
-            if (originalMs != null) {
-              existing.originalMs = (existing.originalMs || 0) + originalMs;
-            }
-            map.set(lKey, existing);
-          }
+          // label grouping – handled by addToMap
+          addToMap(
+            null,
+            null,
+            null,
+            estimated,
+            actual,
+            remaining,
+            originalMs,
+            card,
+          );
           continue;
         }
 
-        const existing = map.get(key) || {
+        addToMap(
+          key,
           label,
           listName,
-          cardId: groupBy === "card" ? card.cardId : undefined,
-          estimatedMs: 0,
-          originalMs: null,
-          actualMs: 0,
-          remainingMs: 0,
-        };
-        existing.estimatedMs += estimated;
-        existing.actualMs += actual;
-        existing.remainingMs += remaining;
-        if (originalMs != null) {
-          existing.originalMs = (existing.originalMs || 0) + originalMs;
-        }
-        map.set(key, existing);
+          estimated,
+          actual,
+          remaining,
+          originalMs,
+          card,
+        );
       }
     }
 
@@ -478,6 +574,7 @@ export default function EstimateApp({ t }) {
             {summary.totalOriginal != null &&
               summary.totalOriginal !== summary.totalEstimated && (
                 <span style={styles.originalHint}>
+                  {" "}
                   (oppr. {formatDuration(summary.totalOriginal)})
                 </span>
               )}

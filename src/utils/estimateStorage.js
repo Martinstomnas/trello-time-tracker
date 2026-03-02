@@ -5,8 +5,8 @@
  * ----------
  * Two tables in Supabase:
  *
- * time_estimates: One row per member per card
- *   - board_id, card_id, member_id, member_name
+ * time_estimates: One row per member per card, OR one row with member_id=NULL for card-level estimate
+ *   - board_id, card_id, member_id (nullable), member_name (nullable)
  *   - estimated_ms
  *   - created_at, updated_at
  *
@@ -29,10 +29,11 @@ const GRACE_PERIOD_MS = 2 * 60 * 1000;
 
 /**
  * Get all estimates for a specific card, grouped by member.
+ * Card-level estimates (member_id IS NULL) use the key "_card".
  * Includes original estimate (first previous_ms from history) when available.
  *
  * @param {object} t – Trello Power-Up iframe context
- * @returns {Object} { [memberId]: { name, estimatedMs, originalMs, updatedAt } }
+ * @returns {Object} { [memberId | "_card"]: { name, estimatedMs, originalMs, updatedAt } }
  */
 export async function getCardEstimates(t) {
   const card = await t.card("id");
@@ -68,8 +69,9 @@ export async function getCardEstimates(t) {
 
   for (const est of estimates) {
     const originalMs = originalMap[est.id] ?? null;
-    result[est.member_id] = {
-      name: est.member_name,
+    const key = est.member_id ?? "_card";
+    result[key] = {
+      name: est.member_name ?? "Kort (generelt)",
       estimatedMs: est.estimated_ms,
       originalMs, // null if never re-estimated
       updatedAt: est.updated_at,
@@ -153,6 +155,74 @@ export async function setEstimate(t, estimatedMs, targetMember, reason) {
 }
 
 /**
+ * Set or update a card-level estimate (not tied to a person).
+ * Uses member_id = NULL in the database.
+ *
+ * @param {object} t – Trello Power-Up iframe context
+ * @param {number} estimatedMs – Estimated time in milliseconds
+ * @param {string} [reason] – Optional reason for re-estimation
+ */
+export async function setCardEstimate(t, estimatedMs, reason) {
+  const card = await t.card("id");
+  const board = await t.board("id");
+
+  // Check if card-level estimate already exists
+  const { data: existing } = await supabase
+    .from("time_estimates")
+    .select("id, estimated_ms, updated_at")
+    .eq("card_id", card.id)
+    .is("member_id", null)
+    .maybeSingle();
+
+  if (existing) {
+    // Only act if value actually changed
+    if (existing.estimated_ms !== estimatedMs) {
+      const lastUpdate = new Date(existing.updated_at).getTime();
+      const now = Date.now();
+      const withinGrace = now - lastUpdate < GRACE_PERIOD_MS;
+
+      if (!withinGrace) {
+        // Log the change to history
+        await supabase.from("estimate_history").insert({
+          estimate_id: existing.id,
+          board_id: board.id,
+          card_id: card.id,
+          member_id: null,
+          member_name: null,
+          previous_ms: existing.estimated_ms,
+          new_ms: estimatedMs,
+          reason: reason || null,
+        });
+      }
+
+      // Update existing estimate
+      const { error } = await supabase
+        .from("time_estimates")
+        .update({
+          estimated_ms: estimatedMs,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+
+      if (error)
+        console.error("[TimeTracker] setCardEstimate update error:", error);
+    }
+  } else {
+    // Insert new card-level estimate
+    const { error } = await supabase.from("time_estimates").insert({
+      board_id: board.id,
+      card_id: card.id,
+      member_id: null,
+      member_name: null,
+      estimated_ms: estimatedMs,
+    });
+
+    if (error)
+      console.error("[TimeTracker] setCardEstimate insert error:", error);
+  }
+}
+
+/**
  * Remove estimate for a member on a card.
  * @param {object} t – Trello Power-Up iframe context
  * @param {{ id: string }} [targetMember] – Defaults to current user
@@ -168,6 +238,22 @@ export async function removeEstimate(t, targetMember) {
     .eq("member_id", member.id);
 
   if (error) console.error("[TimeTracker] removeEstimate error:", error);
+}
+
+/**
+ * Remove the card-level estimate (member_id IS NULL).
+ * @param {object} t – Trello Power-Up iframe context
+ */
+export async function removeCardEstimate(t) {
+  const card = await t.card("id");
+
+  const { error } = await supabase
+    .from("time_estimates")
+    .delete()
+    .eq("card_id", card.id)
+    .is("member_id", null);
+
+  if (error) console.error("[TimeTracker] removeCardEstimate error:", error);
 }
 
 // ---------------------------------------------------------------------------
@@ -257,6 +343,8 @@ export async function getBoardEstimateReport(t, filters = {}) {
         listName: live?.listName || "",
         labels: live?.labels || [],
         members: {},
+        cardEstimateMs: 0,
+        cardEstimateOriginalMs: null,
       });
     }
     return cardMap.get(cardId);
@@ -278,9 +366,15 @@ export async function getBoardEstimateReport(t, filters = {}) {
   // Fill in estimates
   for (const est of estimates || []) {
     const card = getOrCreateCard(est.card_id);
-    const member = getOrCreateMember(card, est.member_id, est.member_name);
-    member.estimatedMs = est.estimated_ms;
-    member.originalMs = originalMap[est.id] ?? null;
+    if (est.member_id === null) {
+      // Card-level estimate – store on card object directly
+      card.cardEstimateMs = est.estimated_ms;
+      card.cardEstimateOriginalMs = originalMap[est.id] ?? null;
+    } else {
+      const member = getOrCreateMember(card, est.member_id, est.member_name);
+      member.estimatedMs = est.estimated_ms;
+      member.originalMs = originalMap[est.id] ?? null;
+    }
   }
 
   // Fill in actual time
@@ -301,9 +395,11 @@ export async function getBoardEstimateReport(t, filters = {}) {
     member.activeStart = new Date(active.started_at).getTime();
   }
 
-  // Only return cards that have at least one estimate
-  const cards = Array.from(cardMap.values()).filter((c) =>
-    Object.values(c.members).some((m) => m.estimatedMs > 0),
+  // Only return cards that have at least one estimate (person or card-level)
+  const cards = Array.from(cardMap.values()).filter(
+    (c) =>
+      c.cardEstimateMs > 0 ||
+      Object.values(c.members).some((m) => m.estimatedMs > 0),
   );
 
   return { cards, cardInfoMap };
