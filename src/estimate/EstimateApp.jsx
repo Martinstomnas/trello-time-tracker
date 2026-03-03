@@ -478,9 +478,12 @@ export default function EstimateApp({ t }) {
       }
     }
 
-    // Calculate deviation and accuracy for each row
+    // Calculate deviation and accuracy for each row.
+    // remainingMs is recalculated from group totals so that one member's
+    // overspend correctly cancels out another member's remaining time.
     let results = Array.from(map.values()).map((row) => ({
       ...row,
+      remainingMs: Math.max(0, row.estimatedMs - row.actualMs),
       deviationMs: deviationMs(row.estimatedMs, row.actualMs),
       deviationPct: deviationPct(row.estimatedMs, row.actualMs),
       accuracy: accuracyScore(row.estimatedMs, row.actualMs),

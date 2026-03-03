@@ -34,10 +34,17 @@ export default function EstimateCardApp({ t }) {
 
   const toggleMember = useCallback((id) => {
     setSelectedMembers((prev) => {
-      if (prev.includes(id)) {
-        return prev.filter((m) => m !== id);
+      if (id === "_card") {
+        // Toggle card — remove all person selections
+        return prev.includes("_card") ? [] : ["_card"];
+      } else {
+        // Toggle person — remove card selection
+        const withoutCard = prev.filter((m) => m !== "_card");
+        if (withoutCard.includes(id)) {
+          return withoutCard.filter((m) => m !== id);
+        }
+        return [...withoutCard, id];
       }
-      return [...prev, id];
     });
   }, []);
 
@@ -143,10 +150,24 @@ export default function EstimateCardApp({ t }) {
         // Set card-level estimate if selected
         if (hasCardSelection) {
           await setCardEstimate(t, ms);
+
+          // Remove any existing per-person estimates on this card
+          const existingPersonEstimates = Object.keys(estimates).filter(
+            (k) => k !== "_card",
+          );
+          for (const personId of existingPersonEstimates) {
+            const target = personId === memberId ? null : { id: personId };
+            await removeEstimate(t, target);
+          }
         }
 
         // Set person estimates for selected persons
         if (personSelections.length > 0) {
+          // Remove any existing card-level estimate
+          if (estimates["_card"]) {
+            await removeCardEstimate(t);
+          }
+
           const targets =
             personSelections.includes("self") && personSelections.length === 1
               ? [null]
@@ -222,14 +243,13 @@ export default function EstimateCardApp({ t }) {
   const hasCardSelection = selectedMembers.includes("_card");
   const personCount = selectedMembers.filter((id) => id !== "_card").length;
   let helperText = "";
-  if (hasCardSelection && personCount > 0) {
-    helperText = "Settes for kortet og valgte person(er).";
-  } else if (hasCardSelection) {
-    helperText = "Settes for hele kortet.";
+  if (hasCardSelection) {
+    helperText =
+      "Settes for hele kortet. Erstatter eventuelle personestimater.";
   } else if (personCount > 0) {
     helperText = "Settes for valgte person(er).";
   } else {
-    helperText = "Velg minst én person eller kort.";
+    helperText = "Velg kort (generelt) eller person(er).";
   }
 
   return (
@@ -275,10 +295,7 @@ export default function EstimateCardApp({ t }) {
                           .filter((m) => m.id !== memberId)
                           .map((m) => m.id),
                       ];
-                      const hasCard = selectedMembers.includes("_card");
-                      setSelectedMembers(
-                        hasCard ? [...personIds, "_card"] : personIds,
-                      );
+                      setSelectedMembers(personIds); // ikke inkluder _card
                     }}
                   >
                     Velg alle
@@ -356,7 +373,7 @@ export default function EstimateCardApp({ t }) {
           <table style={styles.table}>
             <thead>
               <tr>
-                <th style={styles.th}>Estimat</th>
+                <th style={styles.th}>Kort/person</th>
                 <th style={{ ...styles.th, textAlign: "right" }}>Estimat</th>
                 <th style={{ ...styles.th, textAlign: "right" }}>Faktisk</th>
                 <th style={{ ...styles.th, textAlign: "right" }}>
