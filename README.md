@@ -54,7 +54,7 @@ A free, open-source Trello Power-Up for time tracking and estimation. Track time
 
 ### Multi-Board Support
 
-- Each board has isolated data – all queries are scoped by `board_id`
+- Each board has isolated data – all rows include a `board_id`, and board-level reports are scoped by `board_id`
 
 ## Tech Stack
 
@@ -136,7 +136,7 @@ create table time_estimates (
   id uuid primary key default gen_random_uuid(),
   board_id text not null,
   card_id text not null,
-  member_id text not null,
+  member_id text,
   member_name text,
   estimated_ms bigint not null,
   created_at timestamptz default now(),
@@ -153,7 +153,7 @@ create table estimate_history (
   estimate_id uuid references time_estimates(id) on delete cascade,
   board_id text not null,
   card_id text not null,
-  member_id text not null,
+  member_id text,
   member_name text,
   previous_ms bigint not null,
   new_ms bigint not null,
@@ -250,7 +250,7 @@ trello-time-tracker/
 │   │   ├── storage.js      # Time tracking operations (start/stop/adjust/report)
 │   │   ├── estimateStorage.js # Estimate operations (set/remove/report/history)
 │   │   ├── time.js         # Time formatting and parsing
-│   │   └── export.js       # CSV and JSON export
+│   │   └── export.js       # CSV export
 │   ├── timer/
 │   │   ├── main.jsx        # Timer popup entry point (tabbed: Registrert tid / Estimert tid)
 │   │   └── TimerApp.jsx    # Timer UI (start/stop, manual entry, member list)

@@ -4,6 +4,8 @@ import {
   getCardEstimates,
   setEstimate,
   removeEstimate,
+  setCardEstimate,
+  removeCardEstimate,
 } from "../utils/estimateStorage.js";
 import {
   formatDuration,
@@ -14,6 +16,7 @@ import {
 /**
  * EstimateCardApp – Card-level estimate popup.
  * Separate window for managing time estimates per person on a card.
+ * Supports both card-level (general) and per-person estimates via checkboxes.
  */
 export default function EstimateCardApp({ t }) {
   const [timeData, setTimeData] = useState({});
@@ -31,10 +34,17 @@ export default function EstimateCardApp({ t }) {
 
   const toggleMember = useCallback((id) => {
     setSelectedMembers((prev) => {
-      if (prev.includes(id)) {
-        return prev.filter((m) => m !== id);
+      if (id === "_card") {
+        // Toggle card — remove all person selections
+        return prev.includes("_card") ? [] : ["_card"];
+      } else {
+        // Toggle person — remove card selection
+        const withoutCard = prev.filter((m) => m !== "_card");
+        if (withoutCard.includes(id)) {
+          return withoutCard.filter((m) => m !== id);
+        }
+        return [...withoutCard, id];
       }
-      return [...prev, id];
     });
   }, []);
 
@@ -133,20 +143,46 @@ export default function EstimateCardApp({ t }) {
 
       setSavingEstimate(true);
       try {
-        const targets =
-          selectedMembers.includes("self") && selectedMembers.length === 1
-            ? [null]
-            : selectedMembers
-                .map((id) => {
-                  if (id === "self")
-                    return { id: memberId, fullName: memberName };
-                  const bm = boardMembers.find((m) => m.id === id);
-                  return bm ? { id: bm.id, fullName: bm.fullName } : null;
-                })
-                .filter(Boolean);
+        // Separate card-level and person selections
+        const hasCardSelection = selectedMembers.includes("_card");
+        const personSelections = selectedMembers.filter((id) => id !== "_card");
 
-        for (const target of targets) {
-          await setEstimate(t, ms, target);
+        // Set card-level estimate if selected
+        if (hasCardSelection) {
+          await setCardEstimate(t, ms);
+
+          // Remove any existing per-person estimates on this card
+          const existingPersonEstimates = Object.keys(estimates).filter(
+            (k) => k !== "_card",
+          );
+          for (const personId of existingPersonEstimates) {
+            const target = personId === memberId ? null : { id: personId };
+            await removeEstimate(t, target);
+          }
+        }
+
+        // Set person estimates for selected persons
+        if (personSelections.length > 0) {
+          // Remove any existing card-level estimate
+          if (estimates["_card"]) {
+            await removeCardEstimate(t);
+          }
+
+          const targets =
+            personSelections.includes("self") && personSelections.length === 1
+              ? [null]
+              : personSelections
+                  .map((id) => {
+                    if (id === "self")
+                      return { id: memberId, fullName: memberName };
+                    const bm = boardMembers.find((m) => m.id === id);
+                    return bm ? { id: bm.id, fullName: bm.fullName } : null;
+                  })
+                  .filter(Boolean);
+
+          for (const target of targets) {
+            await setEstimate(t, ms, target);
+          }
         }
 
         setEstimateInput("");
@@ -173,9 +209,13 @@ export default function EstimateCardApp({ t }) {
     async (targetMemberId) => {
       setSavingEstimate(true);
       try {
-        const target =
-          targetMemberId === memberId ? null : { id: targetMemberId };
-        await removeEstimate(t, target);
+        if (targetMemberId === "_card") {
+          await removeCardEstimate(t);
+        } else {
+          const target =
+            targetMemberId === memberId ? null : { id: targetMemberId };
+          await removeEstimate(t, target);
+        }
         await refreshEstimates();
         await touchBadges();
       } catch (e) {
@@ -193,40 +233,97 @@ export default function EstimateCardApp({ t }) {
 
   const estimateEntries = Object.entries(estimates);
 
+  // Calculate total actual time across all members (for card-level estimate comparison)
+  const totalActualAllMembers = Object.values(timeData).reduce(
+    (s, d) => s + getTotalWithActive(d),
+    0,
+  );
+
+  // Determine helper text based on selection
+  const hasCardSelection = selectedMembers.includes("_card");
+  const personCount = selectedMembers.filter((id) => id !== "_card").length;
+  let helperText = "";
+  if (hasCardSelection) {
+    helperText =
+      "Settes for hele kortet. Erstatter eventuelle personestimater.";
+  } else if (personCount > 0) {
+    helperText = "Settes for valgte person(er).";
+  } else {
+    helperText = "Velg kort (generelt) eller person(er).";
+  }
+
   return (
     <div style={styles.container}>
       {/* ── Top row: 2-column layout ── */}
       <div style={styles.topRow}>
-        {/* LEFT: Person checkboxes */}
-        {boardMembers.length > 1 && (
-          <div style={styles.leftCol}>
-            <div style={styles.sectionTitle}>Personer</div>
-            <div style={styles.memberCheckboxList}>
-              <label style={styles.memberCheckbox}>
-                <input
-                  type="checkbox"
-                  checked={selectedMembers.includes("self")}
-                  onChange={() => toggleMember("self")}
-                  style={{ margin: 0 }}
-                />
-                <span>Meg selv</span>
-              </label>
-              {boardMembers
-                .filter((m) => m.id !== memberId)
-                .map((m) => (
-                  <label key={m.id} style={styles.memberCheckbox}>
-                    <input
-                      type="checkbox"
-                      checked={selectedMembers.includes(m.id)}
-                      onChange={() => toggleMember(m.id)}
-                      style={{ margin: 0 }}
-                    />
-                    <span>{m.fullName}</span>
-                  </label>
-                ))}
-            </div>
+        {/* LEFT: Person checkboxes + card checkbox */}
+        <div style={styles.leftCol}>
+          <div style={styles.sectionTitle}>Estimat for</div>
+          <div style={styles.memberCheckboxList}>
+            {boardMembers.length > 1 && (
+              <>
+                <label style={styles.memberCheckbox}>
+                  <input
+                    type="checkbox"
+                    checked={selectedMembers.includes("self")}
+                    onChange={() => toggleMember("self")}
+                    style={{ margin: 0 }}
+                  />
+                  <span>Meg selv</span>
+                </label>
+                {boardMembers
+                  .filter((m) => m.id !== memberId)
+                  .map((m) => (
+                    <label key={m.id} style={styles.memberCheckbox}>
+                      <input
+                        type="checkbox"
+                        checked={selectedMembers.includes(m.id)}
+                        onChange={() => toggleMember(m.id)}
+                        style={{ margin: 0 }}
+                      />
+                      <span>{m.fullName}</span>
+                    </label>
+                  ))}
+                <div style={styles.selectAllRow}>
+                  <button
+                    style={styles.selectAllBtn}
+                    disabled={savingEstimate}
+                    onClick={() => {
+                      const personIds = [
+                        "self",
+                        ...boardMembers
+                          .filter((m) => m.id !== memberId)
+                          .map((m) => m.id),
+                      ];
+                      setSelectedMembers(personIds); // ikke inkluder _card
+                    }}
+                  >
+                    Velg alle
+                  </button>
+                  <button
+                    style={styles.selectAllBtn}
+                    disabled={savingEstimate}
+                    onClick={() => setSelectedMembers([])}
+                  >
+                    Fjern valg
+                  </button>
+                </div>
+                <div style={styles.checkboxDivider} />
+              </>
+            )}
+            <label style={styles.memberCheckbox}>
+              <input
+                type="checkbox"
+                checked={selectedMembers.includes("_card")}
+                onChange={() => toggleMember("_card")}
+                style={{ margin: 0 }}
+              />
+              <span style={{ fontStyle: "italic", color: "#5E6C84" }}>
+                Kort (generelt)
+              </span>
+            </label>
           </div>
-        )}
+        </div>
 
         {/* RIGHT: Estimate input */}
         <div style={styles.rightCol}>
@@ -245,10 +342,19 @@ export default function EstimateCardApp({ t }) {
             />
             <button
               onClick={() => handleSetEstimate(estimateInput)}
-              disabled={savingEstimate || !estimateInput.trim()}
+              disabled={
+                savingEstimate ||
+                !estimateInput.trim() ||
+                selectedMembers.length === 0
+              }
               style={{
                 ...styles.smallBtn,
-                opacity: savingEstimate || !estimateInput.trim() ? 0.5 : 1,
+                opacity:
+                  savingEstimate ||
+                  !estimateInput.trim() ||
+                  selectedMembers.length === 0
+                    ? 0.5
+                    : 1,
               }}
               title="Sett estimat"
             >
@@ -256,7 +362,7 @@ export default function EstimateCardApp({ t }) {
             </button>
           </div>
           <div style={{ fontSize: 11, color: "#8993A4", marginTop: 6 }}>
-            Settes for valgte person(er).
+            {helperText}
           </div>
         </div>
       </div>
@@ -267,7 +373,7 @@ export default function EstimateCardApp({ t }) {
           <table style={styles.table}>
             <thead>
               <tr>
-                <th style={styles.th}>Person</th>
+                <th style={styles.th}>Kort/person</th>
                 <th style={{ ...styles.th, textAlign: "right" }}>Estimat</th>
                 <th style={{ ...styles.th, textAlign: "right" }}>Faktisk</th>
                 <th style={{ ...styles.th, textAlign: "right" }}>
@@ -278,9 +384,13 @@ export default function EstimateCardApp({ t }) {
             </thead>
             <tbody>
               {estimateEntries.map(([mId, est]) => {
-                const actual = timeData[mId]
-                  ? getTotalWithActive(timeData[mId])
-                  : 0;
+                // For card-level estimate, actual = sum of ALL tracked time
+                const actual =
+                  mId === "_card"
+                    ? totalActualAllMembers
+                    : timeData[mId]
+                      ? getTotalWithActive(timeData[mId])
+                      : 0;
                 const remaining = Math.max(0, est.estimatedMs - actual);
                 const isOver = actual > est.estimatedMs;
                 const hasOriginal =
@@ -288,7 +398,7 @@ export default function EstimateCardApp({ t }) {
                 return (
                   <tr key={mId}>
                     <td style={styles.td}>
-                      {est.name || mId}
+                      {mId === "_card" ? "Kort (generelt)" : est.name || mId}
                       {mId === memberId ? " (deg)" : ""}
                     </td>
                     <td
@@ -358,7 +468,11 @@ export default function EstimateCardApp({ t }) {
                   const totalActual = estimateEntries.reduce(
                     (s, [mId]) =>
                       s +
-                      (timeData[mId] ? getTotalWithActive(timeData[mId]) : 0),
+                      (mId === "_card"
+                        ? totalActualAllMembers
+                        : timeData[mId]
+                          ? getTotalWithActive(timeData[mId])
+                          : 0),
                     0,
                   );
                   const totalRemaining = Math.max(
@@ -441,8 +555,8 @@ const styles = {
   topRow: {
     display: "flex",
     alignItems: "flex-start",
-    justifyContent: "flex-start", // ← legger seg etter checkboksene
-    gap: 50, // litt mer luft mellom kolonnene
+    justifyContent: "flex-start",
+    gap: 50,
     padding: "8px 0",
   },
   leftCol: {
@@ -521,6 +635,10 @@ const styles = {
     margin: 0,
     minHeight: 24,
   },
+  checkboxDivider: {
+    borderTop: "1px solid #DFE1E6",
+    margin: "4px 0",
+  },
 
   /* ── Table section ── */
   tableSection: {
@@ -555,5 +673,20 @@ const styles = {
     fontSize: 12,
     color: "#B04632",
     padding: "2px 4px",
+  },
+  selectAllRow: {
+    display: "flex",
+    gap: 0,
+    marginTop: 0,
+    marginBottom: 10,
+  },
+  selectAllBtn: {
+    padding: "3px 8px",
+    fontSize: 11,
+    border: "1px solid #DFE1E6",
+    borderRadius: 3,
+    backgroundColor: "#FAFBFC",
+    color: "#5E6C84",
+    cursor: "pointer",
   },
 };
