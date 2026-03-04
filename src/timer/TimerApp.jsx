@@ -259,61 +259,63 @@ export default function TimerApp({ t }) {
       {/* ── Top row: 3-column layout ── */}
       <div style={styles.topRow}>
         {/* LEFT: Person checkboxes */}
-        {boardMembers.length > 1 && (
-          <div style={styles.leftCol}>
-            <div style={styles.sectionTitle}>Personer</div>
-            <div style={styles.memberCheckboxList}>
-              <label style={styles.memberCheckbox}>
-                <input
-                  type="checkbox"
-                  checked={selectedMembers.includes("self")}
-                  onChange={() => toggleMember("self")}
+        <div style={styles.leftCol}>
+          <div style={styles.sectionTitle}>Personer</div>
+          {boardMembers.length > 1 && (
+            <>
+              <div style={styles.memberCheckboxList}>
+                <label style={styles.memberCheckbox}>
+                  <input
+                    type="checkbox"
+                    checked={selectedMembers.includes("self")}
+                    onChange={() => toggleMember("self")}
+                    disabled={saving}
+                    style={{ margin: 0 }}
+                  />
+                  <span>Meg selv</span>
+                </label>
+                {boardMembers
+                  .filter((m) => m.id !== memberId)
+                  .map((m) => (
+                    <label key={m.id} style={styles.memberCheckbox}>
+                      <input
+                        type="checkbox"
+                        checked={selectedMembers.includes(m.id)}
+                        onChange={() => toggleMember(m.id)}
+                        disabled={saving}
+                        style={{ margin: 0 }}
+                      />
+                      <span>{m.fullName}</span>
+                    </label>
+                  ))}
+              </div>
+              <div style={styles.selectAllRow}>
+                <button
+                  style={styles.selectAllBtn}
                   disabled={saving}
-                  style={{ margin: 0 }}
-                />
-                <span>Meg selv</span>
-              </label>
-              {boardMembers
-                .filter((m) => m.id !== memberId)
-                .map((m) => (
-                  <label key={m.id} style={styles.memberCheckbox}>
-                    <input
-                      type="checkbox"
-                      checked={selectedMembers.includes(m.id)}
-                      onChange={() => toggleMember(m.id)}
-                      disabled={saving}
-                      style={{ margin: 0 }}
-                    />
-                    <span>{m.fullName}</span>
-                  </label>
-                ))}
-            </div>
-            <div style={styles.selectAllRow}>
-              <button
-                style={styles.selectAllBtn}
-                disabled={saving}
-                onClick={() => {
-                  const allIds = [
-                    "self",
-                    ...boardMembers
-                      .filter((m) => m.id !== memberId)
-                      .map((m) => m.id),
-                  ];
-                  setSelectedMembers(allIds);
-                }}
-              >
-                Velg alle
-              </button>
-              <button
-                style={styles.selectAllBtn}
-                disabled={saving}
-                onClick={() => setSelectedMembers([])}
-              >
-                Fjern valg
-              </button>
-            </div>
-          </div>
-        )}
+                  onClick={() => {
+                    const allIds = [
+                      "self",
+                      ...boardMembers
+                        .filter((m) => m.id !== memberId)
+                        .map((m) => m.id),
+                    ];
+                    setSelectedMembers(allIds);
+                  }}
+                >
+                  Velg alle
+                </button>
+                <button
+                  style={styles.selectAllBtn}
+                  disabled={saving}
+                  onClick={() => setSelectedMembers([])}
+                >
+                  Fjern valg
+                </button>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* CENTER: Timer display + toggle + total */}
         <div style={styles.centerCol}>
