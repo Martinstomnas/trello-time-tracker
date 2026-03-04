@@ -316,13 +316,13 @@ export async function getBoardTimeReport(t, filters = {}) {
   const nowMs = Date.now();
   const periodIncludesNow =
     !filters.to || nowMs - new Date(filters.to).getTime() < 60000;
+  const fromMs = filters.from ? new Date(filters.from).getTime() : 0;
+  const toMs = filters.to ? new Date(filters.to).getTime() : Infinity;
 
   for (const active of actives || []) {
     const activeStartMs = new Date(active.started_at).getTime();
 
     // Calculate overlap between the active timer and the filtered period
-    const fromMs = filters.from ? new Date(filters.from).getTime() : 0;
-    const toMs = filters.to ? new Date(filters.to).getTime() : Infinity;
     const overlapStart = Math.max(activeStartMs, fromMs);
     const overlapEnd = Math.min(nowMs, toMs);
 
