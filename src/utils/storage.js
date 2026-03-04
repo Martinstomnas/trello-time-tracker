@@ -314,10 +314,10 @@ export async function getBoardTimeReport(t, filters = {}) {
   // Presets like "today", "this week" set filters.to close to Date.now(),
   // while past presets like "yesterday" set filters.to far in the past.
   const nowMs = Date.now();
-  const periodIncludesNow =
-    !filters.to || nowMs - new Date(filters.to).getTime() < 60000;
   const fromMs = filters.from ? new Date(filters.from).getTime() : 0;
   const toMs = filters.to ? new Date(filters.to).getTime() : Infinity;
+  const graceMs = 60000; // 60s grace window for presets where to ≈ Date.now()
+  const periodIncludesNow = nowMs >= fromMs && nowMs <= toMs + graceMs;
 
   for (const active of actives || []) {
     const activeStartMs = new Date(active.started_at).getTime();
