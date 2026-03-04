@@ -310,7 +310,25 @@ export async function getBoardTimeReport(t, filters = {}) {
     card.timeData[entry.member_id].totalMs += entry.duration_ms || 0;
   }
 
+  // Determine if the filtered period includes the current moment.
+  // Presets like "today", "this week" set filters.to close to Date.now(),
+  // while past presets like "yesterday" set filters.to far in the past.
+  const nowMs = Date.now();
+  const periodIncludesNow =
+    !filters.to || nowMs - new Date(filters.to).getTime() < 60000;
+
   for (const active of actives || []) {
+    const activeStartMs = new Date(active.started_at).getTime();
+
+    // Calculate overlap between the active timer and the filtered period
+    const fromMs = filters.from ? new Date(filters.from).getTime() : 0;
+    const toMs = filters.to ? new Date(filters.to).getTime() : Infinity;
+    const overlapStart = Math.max(activeStartMs, fromMs);
+    const overlapEnd = Math.min(nowMs, toMs);
+
+    // Skip timer if it has no overlap with the filtered period
+    if (overlapStart >= overlapEnd && !periodIncludesNow) continue;
+
     if (!cardMap.has(active.card_id)) {
       const live = cardInfoMap[active.card_id];
       cardMap.set(active.card_id, {
@@ -330,10 +348,19 @@ export async function getBoardTimeReport(t, filters = {}) {
         activeTimerId: null,
       };
     }
-    card.timeData[active.member_id].activeStart = new Date(
-      active.started_at,
-    ).getTime();
-    card.timeData[active.member_id].activeTimerId = active.id;
+
+    if (periodIncludesNow) {
+      // Current period: show as active (green, ticking) with clamped start
+      card.timeData[active.member_id].activeStart = Math.max(
+        activeStartMs,
+        fromMs,
+      );
+      card.timeData[active.member_id].activeTimerId = active.id;
+    } else {
+      // Past period: add the fixed time contribution, don't show as active
+      card.timeData[active.member_id].totalMs += overlapEnd - overlapStart;
+      card.timeData[active.member_id].activeTimerId = active.id;
+    }
   }
 
   return { cards: Array.from(cardMap.values()), cardInfoMap };
