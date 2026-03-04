@@ -359,7 +359,6 @@ export async function getBoardTimeReport(t, filters = {}) {
     } else {
       // Past period: add the fixed time contribution, don't show as active
       card.timeData[active.member_id].totalMs += overlapEnd - overlapStart;
-      card.timeData[active.member_id].activeTimerId = active.id;
     }
   }
 
