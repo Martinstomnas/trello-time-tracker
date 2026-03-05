@@ -119,6 +119,10 @@ create index idx_time_entries_dates on time_entries(started_at, ended_at);
 create index idx_active_timers_card on active_timers(card_id);
 create index idx_active_timers_board on active_timers(board_id);
 
+-- RLS is enabled but policies are open. This is acceptable because each team
+-- hosts their own Supabase instance, so the database is not shared across teams.
+-- If you need stricter access control, consider adding a Supabase Edge Function
+-- that validates Trello JWT tokens (via t.jwt()) before writing to the database.
 alter table time_entries enable row level security;
 alter table active_timers enable row level security;
 
@@ -164,6 +168,7 @@ create table estimate_history (
 create index idx_estimate_history_card on estimate_history(card_id);
 create index idx_estimate_history_estimate on estimate_history(estimate_id);
 
+-- See note above about open RLS policies.
 alter table time_estimates enable row level security;
 alter table estimate_history enable row level security;
 

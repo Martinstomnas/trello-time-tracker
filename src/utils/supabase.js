@@ -3,7 +3,9 @@
  *
  * Uses Vite environment variables (prefixed with VITE_).
  * These are embedded at build time, so they're safe for frontend use.
- * The anon key is designed to be public – Row Level Security protects the data.
+ * The anon key is public in the client bundle. RLS policies are currently
+ * open (using (true)), so access control relies on each team hosting their
+ * own Supabase instance rather than database-level restrictions.
  */
 
 import { createClient } from "@supabase/supabase-js";
