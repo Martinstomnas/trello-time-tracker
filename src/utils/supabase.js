@@ -2,7 +2,8 @@
  * supabase.js – Supabase client singleton.
  *
  * Uses Vite environment variables (prefixed with VITE_).
- * These are embedded at build time, so they're safe for frontend use.
+ * These are embedded at build time and intended for frontend use — they are
+ * not secrets and will be publicly readable in the shipped bundle.
  * The anon key is public in the client bundle. RLS policies are currently
  * open (using (true)), so access control relies on each team hosting their
  * own Supabase instance rather than database-level restrictions.
